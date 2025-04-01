@@ -1,0 +1,126 @@
+name: Release
+run-name: Release ${{ github.event.release.tag_name }}
+
+on:
+  release:
+    types: [created]
+
+# Add permissions needed for release asset uploads
+permissions:
+  contents: write
+
+jobs:
+  set-version: # Get version as first job to re-use the value without needing to re-calculate it. The version is just the tag name excluding the 'v' prefix.
+    name: Set Version for Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set_version.outputs.version }}
+    timeout-minutes: 5
+    steps:
+      - id: set_version
+        run: |
+          # get the tag name without the 'v' prefix
+          version=$(echo ${{ github.event.release.tag_name }} | sed 's/v//')
+
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Release version used in commands is $version"
+
+  update-release-notes:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # Using this in this smaller action to simplify the release process and not port over all the existing changelog handling from other repos.
+      - name: Generate Changelog
+        id: changelog
+        uses: infocus7/changelog-files-action@v2.0.0
+        with:
+          release-tag-name: ${{ github.event.release.tag_name }}
+          changelog-directory: changelogs
+      - uses: actions/download-artifact@v4
+        with:
+          name: changelog
+      - name: Update Release Notes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          changelog_content=$(jq -Rs . < changelog_output.md) # Convert the changelog to JSON so we can send it.
+          curl -L -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO_NAME/releases/$RELEASE_ID" \
+            -d "{\"body\": $changelog_content}"
+
+  build-binaries:
+    name: Build Binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [set-version]
+    strategy:
+      matrix:
+        platform:
+          - os: linux
+            arch: amd64
+            pack: true
+          - os: linux
+            arch: arm64
+            pack: true
+            # disable packing for darwin as it's not supported by upx (as of 4.2.4)
+          - os: darwin
+            arch: amd64
+            pack: false
+          - os: darwin
+            arch: arm64
+            pack: false
+          - os: windows
+            arch: amd64
+            pack: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install UPX
+        uses: crazy-max/ghaction-upx@v3
+        if: matrix.platform.pack == true
+        with:
+          install-only: true
+      - name: Build Binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.platform.os }}
+          GOARCH: ${{ matrix.platform.arch }}
+          VERSION: ${{ needs.set-version.outputs.version }}
+        run: |
+          # if pack is true, use build-and-pack target, otherwise use build target
+          if [ "${{ matrix.platform.pack }}" = "true" ]; then
+            make build-and-pack
+          else
+            make build
+          fi
+      
+      - name: Upload binary to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Define binary path
+          BINARY_PATH="_output/ambient-migration-estimator-snapshot-${{ matrix.platform.os }}-${{ matrix.platform.arch }}-${{ needs.set-version.outputs.version }}"
+
+          # For Windows, add .exe extension when uploading
+          if [ "${{ matrix.platform.os }}" = "windows" ]; then
+            # Rename the file to add .exe extension
+            mv "$BINARY_PATH" "${BINARY_PATH}.exe"
+            BINARY_PATH="${BINARY_PATH}.exe"
+          fi
+
+          # Verify binary exists
+          if [ ! -f "$BINARY_PATH" ]; then
+            echo "::error::Binary not found at $BINARY_PATH"
+            ls -la _output/
+            exit 1
+          fi
+
+          # Upload to release's assets
+          echo "Uploading $BINARY_PATH to release ${{ github.event.release.tag_name }}"
+          gh release upload ${{ github.event.release.tag_name }} "$BINARY_PATH" --clobber

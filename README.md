@@ -20,8 +20,8 @@ This data is collected into a JSON file that can be used for further analysis th
 
 1. Clone the repository:
    ```
-   git clone https://github.com/solo-io/ambient-migration-estimator-cluster-gatherer.git
-   cd ambient-migration-estimator-cluster-gatherer
+   git clone https://github.com/solo-io/ambient-migration-estimator-snapshot.git
+   cd ambient-migration-estimator-snapshot
    ```
 
 2. Build the binary:

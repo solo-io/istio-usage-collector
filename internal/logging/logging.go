@@ -46,13 +46,6 @@ func NewProgress(total, width int) *Progress {
 		progressbar.OptionSetWidth(width),
 		progressbar.OptionSetDescription("Processing"),
 		progressbar.OptionShowIts(),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "#",
-			SaucerHead:    "#",
-			SaucerPadding: "-",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
 	)
 
 	return &Progress{

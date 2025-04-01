@@ -11,6 +11,12 @@ type Config struct {
 	// ContinueProcessing indicates whether to continue processing from the last saved state
 	ContinueProcessing bool
 
-	// OutputFile is the name of the output JSON file
-	OutputFile string
+	// OutputDir is the directory where the output file should be written
+	OutputDir string
+
+	// OutputFormat is the format of the output file (json, yaml, csv)
+	OutputFormat string
+
+	// OutputFilePrefix is the prefix for the output file name
+	OutputFilePrefix string
 }

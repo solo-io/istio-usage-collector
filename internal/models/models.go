@@ -2,56 +2,56 @@ package models
 
 // ClusterInfo represents the top level structure for a Kubernetes cluster
 type ClusterInfo struct {
-	Name       string                    `json:"name"`
-	Namespaces map[string]*NamespaceInfo `json:"namespaces"`
-	Nodes      map[string]NodeInfo       `json:"nodes"`
-	HasMetrics bool                      `json:"has_metrics"`
+	Name       string                    `json:"name" yaml:"name"`
+	Namespaces map[string]*NamespaceInfo `json:"namespaces" yaml:"namespaces"`
+	Nodes      map[string]NodeInfo       `json:"nodes" yaml:"nodes"`
+	HasMetrics bool                      `json:"has_metrics" yaml:"has_metrics"`
 }
 
 // NamespaceInfo represents information about a Kubernetes namespace
 type NamespaceInfo struct {
-	Pods            int          `json:"pods"`
-	IsIstioInjected bool         `json:"is_istio_injected"`
-	Resources       ResourceInfo `json:"resources"`
+	Pods            int          `json:"pods" yaml:"pods"`
+	IsIstioInjected bool         `json:"is_istio_injected" yaml:"is_istio_injected"`
+	Resources       ResourceInfo `json:"resources" yaml:"resources"`
 }
 
 // ResourceInfo represents resource information for a namespace
 type ResourceInfo struct {
-	Regular ContainerResources  `json:"regular"`
-	Istio   *ContainerResources `json:"istio,omitempty"`
+	Regular ContainerResources  `json:"regular" yaml:"regular"`
+	Istio   *ContainerResources `json:"istio,omitempty" yaml:"istio,omitempty"`
 }
 
 // ContainerResources represents a group of container resources
 type ContainerResources struct {
-	Containers int        `json:"containers"`
-	Request    Resources  `json:"request"`
-	Actual     *Resources `json:"actual,omitempty"`
+	Containers int        `json:"containers" yaml:"containers"`
+	Request    Resources  `json:"request" yaml:"request"`
+	Actual     *Resources `json:"actual,omitempty" yaml:"actual,omitempty"`
 }
 
 // Resources represents resource specifications
 type Resources struct {
-	CPU      float64 `json:"cpu"`
-	MemoryGB float64 `json:"memory_gb"`
+	CPU      float64 `json:"cpu" yaml:"cpu"`
+	MemoryGB float64 `json:"memory_gb" yaml:"memory_gb"`
 }
 
 // NodeInfo represents information about a Kubernetes node
 type NodeInfo struct {
-	InstanceType string        `json:"instance_type"`
-	Region       string        `json:"region"`
-	Zone         string        `json:"zone"`
-	Resources    NodeResources `json:"resources"`
+	InstanceType string        `json:"instance_type" yaml:"instance_type"`
+	Region       string        `json:"region" yaml:"region"`
+	Zone         string        `json:"zone" yaml:"zone"`
+	Resources    NodeResources `json:"resources" yaml:"resources"`
 }
 
 // NodeResources represents resource information for a node
 type NodeResources struct {
-	Capacity NodeResourceSpec  `json:"capacity"`
-	Actual   *NodeResourceSpec `json:"actual,omitempty"`
+	Capacity NodeResourceSpec  `json:"capacity" yaml:"capacity"`
+	Actual   *NodeResourceSpec `json:"actual,omitempty" yaml:"actual,omitempty"`
 }
 
 // NodeResourceSpec represents resource specifications for a node
 type NodeResourceSpec struct {
-	CPU      float64 `json:"cpu"`
-	MemoryGB float64 `json:"memory_gb"`
+	CPU      float64 `json:"cpu" yaml:"cpu"`
+	MemoryGB float64 `json:"memory_gb" yaml:"memory_gb"`
 }
 
 // NewClusterInfo creates a new ClusterInfo with initialized maps

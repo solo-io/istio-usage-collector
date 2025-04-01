@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/logging"
 	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/models"
 	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/utils"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,10 +30,13 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 	// Initialize the cluster info
 	clusterInfo := models.NewClusterInfo()
 
+	// Create the output file path
+	outputFile := filepath.Join(cfg.OutputDir, fmt.Sprintf("%s.%s", cfg.OutputFilePrefix, cfg.OutputFormat))
+
 	// Check if we should load existing data
 	if cfg.ContinueProcessing {
-		logging.Info("Continuing from existing data file %s", cfg.OutputFile)
-		existingData, err := loadExistingData(cfg.OutputFile)
+		logging.Info("Continuing from existing data file %s", outputFile)
+		existingData, err := loadExistingData(outputFile)
 		if err != nil {
 			logging.Warn("Failed to load existing data: %v. Starting fresh.", err)
 		} else {
@@ -94,7 +100,7 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 	clusterInfo.HasMetrics = hasMetrics
 
 	// Output to file
-	err = saveClusterInfo(clusterInfo, cfg.OutputFile)
+	err = saveClusterInfo(clusterInfo, outputFile)
 	if err != nil {
 		return fmt.Errorf("failed to save cluster info: %w", err)
 	}
@@ -102,7 +108,7 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 	return nil
 }
 
-// loadExistingData loads cluster info from an existing file
+// loadExistingData loads cluster info from an existing file - used for --continue flag
 func loadExistingData(fileName string) (*models.ClusterInfo, error) {
 	// Check if file exists
 	_, err := os.Stat(fileName)
@@ -116,11 +122,22 @@ func loadExistingData(fileName string) (*models.ClusterInfo, error) {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Parse JSON
+	fileExt := filepath.Ext(fileName)
+
+	// Initialize clusterInfo before unmarshaling
 	clusterInfo := models.NewClusterInfo()
-	err = json.Unmarshal(data, clusterInfo)
+
+	switch fileExt {
+	case ".json":
+		err = json.Unmarshal(data, clusterInfo)
+	case ".yaml", ".yml":
+		err = yaml.Unmarshal(data, clusterInfo)
+	default:
+		return nil, fmt.Errorf("unsupported file extension: %s", fileExt)
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
 
 	return clusterInfo, nil
@@ -650,12 +667,41 @@ func getClusterName(ctx context.Context, kubeContext string, obfuscate bool) (st
 	return clusterName, nil
 }
 
-// saveClusterInfo saves the cluster info to a JSON file
+// saveClusterInfo saves the cluster info to the specified format and location
 func saveClusterInfo(clusterInfo *models.ClusterInfo, outputFile string) error {
-	// Create JSON data
-	data, err := json.MarshalIndent(clusterInfo, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal cluster info: %w", err)
+	// Extract file extension if it exists
+	fileExt := "json"
+	if idx := strings.LastIndex(outputFile, "."); idx >= 0 {
+		fileExt = strings.ToLower(outputFile[idx+1:])
+	}
+
+	// For JSON and YAML formats
+	var data []byte
+	var err error
+
+	switch fileExt {
+	case "json":
+		// Create JSON data
+		data, err = json.MarshalIndent(clusterInfo, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal cluster info to JSON: %w", err)
+		}
+	case "yaml", "yml":
+		// Create YAML data
+		data, err = yaml.Marshal(clusterInfo)
+		if err != nil {
+			return fmt.Errorf("failed to marshal cluster info to YAML: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported output format: %s", fileExt)
+	}
+
+	// Ensure parent directories exist
+	dir := filepath.Dir(outputFile)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory %s: %w", dir, err)
+		}
 	}
 
 	// Write to file

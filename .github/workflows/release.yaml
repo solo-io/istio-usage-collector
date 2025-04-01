@@ -105,7 +105,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Define binary path
-          BINARY_PATH="_output/ambient-migration-estimator-snapshot-${{ matrix.platform.os }}-${{ matrix.platform.arch }}-${{ needs.set-version.outputs.version }}"
+          BINARY_PATH="_output/${{ needs.set-version.outputs.version }}/ambient-migration-estimator-snapshot-${{ matrix.platform.os }}-${{ matrix.platform.arch }}"
 
           # For Windows, add .exe extension when uploading
           if [ "${{ matrix.platform.os }}" = "windows" ]; then
@@ -117,7 +117,7 @@ jobs:
           # Verify binary exists
           if [ ! -f "$BINARY_PATH" ]; then
             echo "::error::Binary not found at $BINARY_PATH"
-            ls -la _output/
+            ls -la _output/${{ needs.set-version.outputs.version }}/
             exit 1
           fi
 

@@ -7,6 +7,7 @@ GO_VERSION=$(shell go version | awk '{print $$3}')
 LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT} -X main.goVersion=${GO_VERSION} -X main.binaryName=${BINARY_NAME} -s -w"
 GOFLAGS=CGO_ENABLED=0
 OUTPUT_DIR=_output
+VERSION_DIR=$(OUTPUT_DIR)/$(VERSION)
 
 # Go variables
 GOCMD=go
@@ -25,12 +26,12 @@ all: clean deps tidy test build
 
 # builds the binary for the current platform
 build: ensure_output_dir ## Build the binary
-	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION) .
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) .
 
 # builds the binary for the current platform and packs it using upx
 build-and-pack: ensure_output_dir ## Build the binary and pack it using upx
-	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION) . && \
-	upx $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) . && \
+	upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)
 
 clean: ## Clean up build artifacts
 	$(GOCLEAN)
@@ -49,7 +50,7 @@ tidy: ## Tidy Go modules
 	$(GOMOD) tidy
 
 ensure_output_dir: ## Create output directory if it doesn't exist
-	mkdir -p $(OUTPUT_DIR)
+	mkdir -p $(VERSION_DIR)
 
 # Platforms to build for (GOOS-GOARCH)
 PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
@@ -59,7 +60,7 @@ cross-build: ensure_output_dir deps tidy ## Build for multiple platforms
 	$(foreach platform,$(PLATFORMS),\
 		$(eval GOOS=$(word 1,$(subst -, ,$(platform)))) \
 		$(eval GOARCH=$(word 2,$(subst -, ,$(platform)))) \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION) .;)
+		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) .;)
 
 # similar to the cross-build target, but also packs the binaries using upx
 # for supported platforms (all but darwin, as of UPX 4.2.4), it reduces binary size by ~2/3.
@@ -67,8 +68,8 @@ cross-build-and-pack: ensure_output_dir deps tidy ## Build for multiple platform
 	$(foreach platform,$(PLATFORMS),\
 		$(eval GOOS=$(word 1,$(subst -, ,$(platform)))) \
 		$(eval GOARCH=$(word 2,$(subst -, ,$(platform)))) \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION) . && \
-		upx $(OUTPUT_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)-$(VERSION);)
+		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) . && \
+		upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH);)
 
 help: ## Show this help
 	@echo "Usage: make [target]"

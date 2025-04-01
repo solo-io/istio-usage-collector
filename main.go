@@ -17,5 +17,6 @@ func main() {
 	// Set the version variables for the commands
 	root.SetVersionInfo(binaryName, version, gitCommit, goVersion, buildTime)
 
+	// Execute the root command
 	root.Execute()
 }

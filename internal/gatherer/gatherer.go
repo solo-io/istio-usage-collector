@@ -58,7 +58,7 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 
 	// Get cluster name
 	if clusterInfo.Name == "" {
-		cluster, err := getClusterName(ctx, clientset, cfg.KubeContext, cfg.ObfuscateNames)
+		cluster, err := getClusterName(ctx, cfg.KubeContext, cfg.ObfuscateNames)
 		if err != nil {
 			return fmt.Errorf("failed to get cluster name: %w", err)
 		}
@@ -139,23 +139,20 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 		return fmt.Errorf("failed to list nodes: %w", err)
 	}
 
-	if len(nodes.Items) == 0 {
+	totalNodes := len(nodes.Items)
+	if totalNodes == 0 {
 		logging.Warn("No nodes found in cluster %s", cfg.KubeContext)
 		return nil
 	}
 
 	// Set up progress tracking
-	totalNodes := len(nodes.Items)
 	progress := logging.NewProgress(totalNodes, 50)
 	logging.Info("Found %d nodes to process", totalNodes)
 
-	// Use an atomic counter for progress
 	var processedCount int32
 
 	// Use a mutex for safe map updates
 	var mu sync.Mutex
-
-	// Create a WaitGroup to track completion
 	var wg sync.WaitGroup
 
 	// Create a context for cancellation
@@ -166,7 +163,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	errorCh := make(chan error, totalNodes)
 
 	// Use a semaphore to control concurrency
-	concurrentLimit := runtime.NumCPU() * 2 // Nodes usually have fewer than namespaces
+	concurrentLimit := runtime.NumCPU() * 2
 	semaphore := make(chan struct{}, concurrentLimit)
 
 	logging.Info("Processing nodes with up to %d concurrent requests", concurrentLimit)
@@ -178,16 +175,15 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 			return ctx.Err()
 		}
 
-		nodeName := node.Name
-		outNodeName := nodeName
+		outNodeName := node.Name
 		if cfg.ObfuscateNames {
-			outNodeName = ObfuscateName(nodeName)
+			outNodeName = ObfuscateName(node.Name)
 		}
 
 		// Check if we should skip this node if continuing
 		if cfg.ContinueProcessing {
 			if _, ok := clusterInfo.Nodes[outNodeName]; ok {
-				// Increment counter but don't process
+				// Increment counter but don't process this as it has already been processed
 				atomic.AddInt32(&processedCount, 1)
 				progress.Update(int(atomic.LoadInt32(&processedCount)))
 				continue
@@ -195,7 +191,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 		}
 
 		wg.Add(1)
-		semaphore <- struct{}{} // Acquire semaphore
+		semaphore <- struct{}{}
 
 		go func(node corev1.Node, outName string) {
 			defer wg.Done()
@@ -208,7 +204,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 			}
 
 			// Process node
-			nodeInfo, err := processNode(workerCtx, clientset, metricsClient, node, hasMetrics)
+			nodeInfo, err := processNode(workerCtx, metricsClient, node, hasMetrics)
 
 			// Update progress
 			count := atomic.AddInt32(&processedCount, 1)
@@ -244,35 +240,11 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	// Complete the progress bar
 	progress.Complete()
 
-	// If we have errors, return an aggregated error
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors processing nodes", len(errors))
 	}
 
 	return nil
-}
-
-// getNodeMetrics gets metrics for all nodes
-func getNodeMetrics(ctx context.Context, metricsClient *metricsv.Clientset) (map[string]models.NodeResourceSpec, error) {
-	metrics, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	nodeMetrics := make(map[string]models.NodeResourceSpec)
-	for _, m := range metrics.Items {
-		// Use direct conversion methods instead of string parsing
-		cpuUsage := m.Usage.Cpu().AsApproximateFloat64()
-		memoryBytes := float64(m.Usage.Memory().Value())
-		memoryGB := memoryBytes / (1024 * 1024 * 1024)
-
-		nodeMetrics[m.Name] = models.NodeResourceSpec{
-			CPU:      cpuUsage,
-			MemoryGB: memoryGB,
-		}
-	}
-
-	return nodeMetrics, nil
 }
 
 // processNamespaces processes all namespaces in the cluster in parallel
@@ -303,35 +275,29 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 
 	// Use a mutex for safe map updates
 	var mu sync.Mutex
-
-	// Create a WaitGroup to track completion
 	var wg sync.WaitGroup
 
 	// Create a context that's cancellable for spawned goroutines
 	workerCtx, cancel := context.WithCancel(ctx)
-	defer cancel() // Ensure cancellation on exit
+	defer cancel()
 
 	// Use a channel to collect errors from goroutines
 	errorCh := make(chan error, totalNamespaces)
 
 	// Use a semaphore to control concurrency based on system resources
-	// For I/O bound tasks like API calls, we can use more goroutines than CPUs
 	concurrentLimit := runtime.NumCPU() * 4
 	semaphore := make(chan struct{}, concurrentLimit)
 
 	logging.Info("Processing namespaces with up to %d concurrent requests", concurrentLimit)
-
-	// Process each namespace
 	for _, ns := range namespaces.Items {
 		// Check parent context for cancellation before spawning more goroutines
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		nsName := ns.Name
-		outNsName := nsName
+		outNsName := ns.Name
 		if cfg.ObfuscateNames {
-			outNsName = ObfuscateName(nsName)
+			outNsName = ObfuscateName(ns.Name)
 		}
 
 		// Check if we should skip this namespace if continuing
@@ -345,11 +311,11 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		}
 
 		wg.Add(1)
-		semaphore <- struct{}{} // Acquire semaphore
+		semaphore <- struct{}{}
 
 		go func(namespace corev1.Namespace, outName string) {
 			defer wg.Done()
-			defer func() { <-semaphore }() // Release semaphore
+			defer func() { <-semaphore }()
 
 			// Check if context is cancelled
 			if workerCtx.Err() != nil {
@@ -357,21 +323,17 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 				return
 			}
 
-			// Process namespace
 			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics)
 
-			// Update progress and add to results
 			count := atomic.AddInt32(&processedCount, 1)
 			progress.Update(int(count))
 
 			if err != nil {
-				// Send error to error channel and log it
 				logging.Warn("Failed to process namespace %s: %v", namespace.Name, err)
 				errorCh <- fmt.Errorf("namespace %s: %w", namespace.Name, err)
 				return
 			}
 
-			// Add namespace to cluster info with lock protection
 			mu.Lock()
 			clusterInfo.Namespaces[outName] = nsInfo
 			mu.Unlock()
@@ -384,7 +346,6 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		close(errorCh)
 	}()
 
-	// Collect errors from workers
 	var errors []error
 	for err := range errorCh {
 		if err != context.Canceled {
@@ -392,10 +353,8 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		}
 	}
 
-	// Complete the progress bar
 	progress.Complete()
 
-	// If we have errors, return an aggregated error
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors processing namespaces", len(errors))
 	}
@@ -405,7 +364,6 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 
 // processNamespace processes an individual namespace
 func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, namespace string, hasMetrics bool) (*models.NamespaceInfo, error) {
-	// Check if the context is cancelled
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -515,7 +473,7 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 					regularCpuActual += cpuUsage
 				}
 
-				// Memory usage
+				// Memory usage in GB
 				memUsage := float64(containerMetric.Usage.Memory().Value()) / (1024 * 1024 * 1024)
 				if isIstioProxy {
 					istioMemActual += memUsage
@@ -541,7 +499,6 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 		},
 	}
 
-	// Add actual usage if metrics were collected
 	if metricsData != nil {
 		nsInfo.Resources.Regular.Actual = &models.Resources{
 			CPU:      regularCpuActual,
@@ -559,7 +516,6 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 			},
 		}
 
-		// Add actual usage for Istio containers if metrics were collected
 		if metricsData != nil {
 			nsInfo.Resources.Istio.Actual = &models.Resources{
 				CPU:      istioCpuActual,
@@ -569,34 +525,6 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 	}
 
 	return nsInfo, nil
-}
-
-// getPodMetrics gets metrics for all pods in a namespace
-func getPodMetrics(ctx context.Context, metricsClient *metricsv.Clientset, namespace string) (map[string]map[string]models.Resources, error) {
-	metrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	podMetrics := make(map[string]map[string]models.Resources)
-	for _, m := range metrics.Items {
-		podName := m.Name
-		podMetrics[podName] = make(map[string]models.Resources)
-
-		for _, container := range m.Containers {
-			// Use direct conversion methods instead of string parsing
-			cpuUsage := container.Usage.Cpu().AsApproximateFloat64()
-			memoryBytes := float64(container.Usage.Memory().Value())
-			memoryGB := memoryBytes / (1024 * 1024 * 1024)
-
-			podMetrics[podName][container.Name] = models.Resources{
-				CPU:      cpuUsage,
-				MemoryGB: memoryGB,
-			}
-		}
-	}
-
-	return podMetrics, nil
 }
 
 // getMetricsWithRetries gets metrics for all pods in a namespace with retry logic
@@ -609,15 +537,12 @@ func getMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clientse
 	retryDelay := 500 * time.Millisecond
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Check if the context is cancelled
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
 		// Try to get metrics
 		result, lastErr = metricsClient.MetricsV1beta1().PodMetricses(namespace).List(ctx, metav1.ListOptions{})
-
-		// If successful or permanent error, return immediately
 		if lastErr == nil {
 			return result, nil
 		}
@@ -686,14 +611,15 @@ func createKubernetesClients(ctx context.Context, kubeContext string) (*kubernet
 		return nil, nil, false, fmt.Errorf("failed to connect to Kubernetes API server: %w", err)
 	}
 
-	// Create metrics client (may fail if metrics API is not available)
+	// Create metrics client
 	metricsClient, err := metricsv.NewForConfig(config)
 	if err != nil {
+		// If the metrics API is not available for whatever reason, we return the regular clientset for usage
 		logging.Warn("Failed to create metrics client: %v", err)
 		return clientset, nil, false, nil
 	}
 
-	// Check if metrics API is available
+	// Check if metrics API is available by calling the metrics API
 	hasMetrics := false
 	if metricsClient != nil {
 		_, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{Limit: 1})
@@ -709,20 +635,14 @@ func createKubernetesClients(ctx context.Context, kubeContext string) (*kubernet
 }
 
 // getClusterName gets the name of the current cluster
-func getClusterName(ctx context.Context, clientset *kubernetes.Clientset, kubeContext string, obfuscate bool) (string, error) {
-	// Try to get cluster info
-	info, err := clientset.Discovery().ServerVersion()
-	if err != nil {
-		return "", fmt.Errorf("failed to get server version: %w", err)
+func getClusterName(ctx context.Context, kubeContext string, obfuscate bool) (string, error) {
+	// Check if the context is cancelled
+	if ctx.Err() != nil {
+		return "", ctx.Err()
 	}
 
 	// Get cluster name from context
 	clusterName := kubeContext
-	if clusterName == "" {
-		clusterName = fmt.Sprintf("kubernetes-%s", info.GitVersion)
-	}
-
-	// Obfuscate name if requested
 	if obfuscate {
 		clusterName = ObfuscateName(clusterName)
 	}
@@ -749,13 +669,12 @@ func saveClusterInfo(clusterInfo *models.ClusterInfo, outputFile string) error {
 }
 
 // processNode processes an individual node
-func processNode(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, node corev1.Node, hasMetrics bool) (models.NodeInfo, error) {
+func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node corev1.Node, hasMetrics bool) (models.NodeInfo, error) {
 	// Check if the context is cancelled
 	if ctx.Err() != nil {
 		return models.NodeInfo{}, ctx.Err()
 	}
 
-	// Get node labels
 	labels := node.Labels
 
 	// Extract instance type, region, and zone
@@ -817,15 +736,11 @@ func getNodeMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clie
 	retryDelay := 500 * time.Millisecond
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Check if the context is cancelled
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
-		// Try to get metrics
 		result, lastErr = metricsClient.MetricsV1beta1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
-
-		// If successful or permanent error, return immediately
 		if lastErr == nil {
 			return result, nil
 		}

@@ -99,7 +99,7 @@ jobs:
           else
             make build
           fi
-      
+      # TODO: Update with google login and push to gcs, maybe as a separate job so we don't log in during matrix.. _if_ jobs share state, we can set a google login job before this, and just push to gcs from here.
       - name: Upload binary to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

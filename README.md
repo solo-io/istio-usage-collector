@@ -45,7 +45,6 @@ This data is collected into a JSON file that can be used for further analysis th
 ### Environment Variables
 
 - `CONTEXT`: Kubernetes context to use. If not set, the current context will be used.
-- `KUBECONFIG`: Path to the kubeconfig file. If not set, `~/.kube/config` will be used.
 
 ### Example
 
@@ -61,6 +60,9 @@ CONTEXT="my-cluster" ./ambient-migration-estimator
 
 # Continue an interrupted collection
 ./ambient-migration-estimator --continue
+
+# Get the version information
+./ambient-migration-estimator --version
 ```
 
 ## Output

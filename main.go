@@ -56,12 +56,14 @@ func main() {
 	help := flag.Bool("help", false, "Show help message")
 	continueProcessing := flag.Bool("continue", false, "Continue processing from the last saved state if the script was interrupted")
 	showVersion := flag.Bool("version", false, "Show version information")
+	context := flag.String("context", "", "Kubernetes context to use (if not set, uses current context)")
 
 	// short flag aliases
 	flag.BoolVar(hideNames, "hn", false, "Hide the names of the cluster and namespaces using a hash")
 	flag.BoolVar(help, "h", false, "Show help message")
 	flag.BoolVar(continueProcessing, "c", false, "Continue processing from the last saved state if the script was interrupted")
 	flag.BoolVar(showVersion, "v", false, "Show version information")
+	flag.StringVar(context, "ctx", "", "Kubernetes context to use (if not set, uses current context)")
 
 	flag.Parse()
 
@@ -75,7 +77,7 @@ func main() {
 	}
 
 	// Get Kubernetes context from environment variable or use default
-	kubeContext := os.Getenv("CONTEXT")
+	kubeContext := *context
 	if kubeContext == "" {
 		var err error
 		kubeContext, err = utils.GetCurrentContext()
@@ -120,6 +122,7 @@ func displayHelpMessage() {
 	fmt.Println("  --help|-h            Show this help message")
 	fmt.Println("  --continue|-c        Continue processing from the last saved state if the script was interrupted")
 	fmt.Println("  --version|-v         Show version information")
+	fmt.Println("  --context|-ctx       Kubernetes context to use (if not set, uses current context)")
 	fmt.Println("")
 	fmt.Println("Environment variables:")
 	fmt.Println("  CONTEXT              Kubernetes context to use (if not set, uses current context)")

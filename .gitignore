@@ -23,4 +23,4 @@ go.work
 cluster_info.json
 
 # Output directory
-_output/ 
+_output/

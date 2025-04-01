@@ -53,7 +53,7 @@ ensure_output_dir: ## Create output directory if it doesn't exist
 	mkdir -p $(VERSION_DIR)
 
 # Platforms to build for (GOOS-GOARCH)
-PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
+PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64
 
 # builds the binary for all supported platforms
 cross-build: ensure_output_dir deps tidy ## Build for multiple platforms

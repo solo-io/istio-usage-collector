@@ -79,13 +79,11 @@ jobs:
           - os: windows
             arch: amd64
             pack: true
+          - os: windows
+            arch: arm64
+            pack: false
     steps:
       - uses: actions/checkout@v4
-      - name: Install UPX
-        uses: crazy-max/ghaction-upx@v3
-        if: matrix.platform.pack == true
-        with:
-          install-only: true
       - name: Build Binary
         shell: bash
         env:

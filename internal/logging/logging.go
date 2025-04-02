@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/schollz/progressbar/v3"
@@ -40,12 +41,13 @@ type Progress struct {
 }
 
 // NewProgress creates a new progress bar
-func NewProgress(total, width int) *Progress {
+func NewProgress(title string, total int) *Progress {
 	bar := progressbar.NewOptions(total,
+		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(width),
-		progressbar.OptionSetDescription("Processing"),
+		progressbar.OptionSetDescription(fmt.Sprintf("[cyan]%s[reset]", title)),
 		progressbar.OptionShowIts(),
+		progressbar.OptionFullWidth(),
 	)
 
 	return &Progress{
@@ -61,4 +63,6 @@ func (p *Progress) Update(current int) {
 // Complete completes the progress bar
 func (p *Progress) Complete() {
 	p.bar.Finish()
+	// add new line to that subsequent logs aren't on the same line
+	fmt.Println()
 }

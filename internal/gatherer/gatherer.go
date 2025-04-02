@@ -163,7 +163,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	}
 
 	// Set up progress tracking
-	progress := logging.NewProgress(totalNodes, 50)
+	progress := logging.NewProgress("Processing nodes", totalNodes)
 	logging.Info("Found %d nodes to process", totalNodes)
 
 	var processedCount int32
@@ -284,7 +284,7 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 
 	// Set up progress tracking
 	totalNamespaces := len(namespaces.Items)
-	progress := logging.NewProgress(totalNamespaces, 50)
+	progress := logging.NewProgress("Processing namespaces", totalNamespaces)
 	logging.Info("Found %d namespaces to process", totalNamespaces)
 
 	// Use an atomic counter for progress

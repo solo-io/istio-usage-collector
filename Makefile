@@ -17,8 +17,11 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
-# Source files
-SOURCES=$(shell find . -name "*.go" -type f)
+# Define extension based on OS (.exe for Windows)
+EXT=
+ifeq ($(GOOS),windows)
+	EXT=.exe
+endif
 
 .PHONY: all build clean test lint deps tidy help cross-build cross-build-and-pack
 
@@ -26,12 +29,14 @@ all: clean deps tidy test build
 
 # builds the binary for the current platform
 build: ensure_output_dir ## Build the binary
-	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) .
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) .
+	(cd $(VERSION_DIR) && shasum -a 256 $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) > $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT).sha256)
 
 # builds the binary for the current platform and packs it using upx
 build-and-pack: ensure_output_dir ## Build the binary and pack it using upx
-	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) . && \
-	upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) . && \
+	upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) && \
+	(cd $(VERSION_DIR) && shasum -a 256 $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) > $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT).sha256)
 
 clean: ## Clean up build artifacts
 	$(GOCLEAN)
@@ -60,7 +65,9 @@ cross-build: ensure_output_dir deps tidy ## Build for multiple platforms
 	$(foreach platform,$(PLATFORMS),\
 		$(eval GOOS=$(word 1,$(subst -, ,$(platform)))) \
 		$(eval GOARCH=$(word 2,$(subst -, ,$(platform)))) \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) .;)
+		$(eval EXT=$(if $(filter windows,$(GOOS)),.exe,)) \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) . && \
+		(cd $(VERSION_DIR) && shasum -a 256 $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) > $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT).sha256);)
 
 # similar to the cross-build target, but also packs the binaries using upx
 # for supported platforms (all but darwin, as of UPX 4.2.4), it reduces binary size by ~2/3.
@@ -68,8 +75,10 @@ cross-build-and-pack: ensure_output_dir deps tidy ## Build for multiple platform
 	$(foreach platform,$(PLATFORMS),\
 		$(eval GOOS=$(word 1,$(subst -, ,$(platform)))) \
 		$(eval GOARCH=$(word 2,$(subst -, ,$(platform)))) \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH) . && \
-		upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH);)
+		$(eval EXT=$(if $(filter windows,$(GOOS)),.exe,)) \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) $(GOFLAGS) $(GOBUILD) $(LDFLAGS) -o $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) . && \
+		upx $(VERSION_DIR)/$(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) && \
+		(cd $(VERSION_DIR) && shasum -a 256 $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT) > $(BINARY_NAME)-$(GOOS)-$(GOARCH)$(EXT).sha256);)
 
 help: ## Show this help
 	@echo "Usage: make [target]"

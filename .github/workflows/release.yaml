@@ -103,10 +103,9 @@ jobs:
         run: |
           # Define binary path
           BINARY_PATH="_output/${{ needs.set-version.outputs.version }}/istio-usage-collector-${{ matrix.platform.os }}-${{ matrix.platform.arch }}"
-
-          # For Windows, add .exe extension when uploading
+          
+          # For Windows builds, the .exe extension is part of the filename
           if [ "${{ matrix.platform.os }}" = "windows" ]; then
-            mv "$BINARY_PATH" "${BINARY_PATH}.exe"
             BINARY_PATH="${BINARY_PATH}.exe"
           fi
 
@@ -117,6 +116,17 @@ jobs:
             exit 1
           fi
 
+          SHA256_PATH="${BINARY_PATH}.sha256"          
+          # Verify the checksum file exists
+          if [ ! -f "$SHA256_PATH" ]; then
+            echo "::error::Checksum file not found at $SHA256_PATH"
+            ls -la _output/${{ needs.set-version.outputs.version }}/
+            exit 1
+          fi
+
           # Upload to release's assets
           echo "Uploading $BINARY_PATH to release ${{ github.event.release.tag_name }}"
           gh release upload ${{ github.event.release.tag_name }} "$BINARY_PATH" --clobber
+
+          echo "Uploading $SHA256_PATH to release ${{ github.event.release.tag_name }}"
+          gh release upload ${{ github.event.release.tag_name }} "$SHA256_PATH" --clobber

@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/solo-io/istio-usage-collector/internal/logging"
@@ -175,8 +174,6 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 		logging.Info("Found %d nodes to process", totalNodes)
 	}
 
-	var processedCount int32
-
 	// Use a mutex for safe map updates
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -211,10 +208,8 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 		if cfg.ContinueProcessing {
 			if _, ok := clusterInfo.Nodes[outNodeName]; ok {
 				logging.Debug("Node %s has already previously been processed, skipping", node.Name)
-				// Increment counter but don't process this as it has already been processed
-				atomic.AddInt32(&processedCount, 1)
 				if progress != nil {
-					progress.Update(int(atomic.LoadInt32(&processedCount)))
+					progress.Increment()
 				}
 				continue
 			} else {
@@ -239,9 +234,8 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 			nodeInfo, err := processNode(workerCtx, metricsClient, node, hasMetrics)
 
 			// Update progress
-			count := atomic.AddInt32(&processedCount, 1)
 			if progress != nil {
-				progress.Update(int(count))
+				progress.Increment()
 			}
 
 			if err != nil {
@@ -309,9 +303,6 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		logging.Info("Found %d namespaces to process", totalNamespaces)
 	}
 
-	// Use an atomic counter for progress
-	var processedCount int32
-
 	// Use a mutex for safe map updates
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -343,10 +334,8 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		if cfg.ContinueProcessing {
 			if _, ok := clusterInfo.Namespaces[outNsName]; ok {
 				logging.Debug("Namespace %s has already previously been processed, skipping", ns.Name)
-				// Increment counter but don't process
-				atomic.AddInt32(&processedCount, 1)
 				if progress != nil {
-					progress.Update(int(atomic.LoadInt32(&processedCount)))
+					progress.Increment()
 				}
 				continue
 			} else {
@@ -369,9 +358,8 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 
 			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics)
 
-			count := atomic.AddInt32(&processedCount, 1)
 			if progress != nil {
-				progress.Update(int(count))
+				progress.Increment()
 			}
 
 			if err != nil {

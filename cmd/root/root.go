@@ -30,7 +30,7 @@ type CommandFlags struct {
 	OutputDir          string
 	OutputFormat       string
 	OutputFilePrefix   string
-	LogLevel           string
+	EnableDebug        bool
 	NoProgress         bool
 }
 
@@ -43,7 +43,7 @@ func DefaultFlags() *CommandFlags {
 		OutputDir:          ".",
 		OutputFormat:       "json",
 		OutputFilePrefix:   "",
-		LogLevel:           "info",
+		EnableDebug:        false,
 		NoProgress:         false,
 	}
 }
@@ -106,8 +106,8 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 			}()
 
 			// defining the log level
-			if flags.LogLevel != "" {
-				logging.SetLevel(flags.LogLevel)
+			if flags.EnableDebug {
+				logging.EnableDebugMessages()
 			}
 
 			// If context is not specified, use current context
@@ -160,7 +160,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 				return err
 			}
 
-			logging.Info("Cluster information gathered successfully")
+			logging.Success("Cluster information gathered successfully")
 			return nil
 		},
 	}
@@ -172,8 +172,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&flags.OutputDir, "output-dir", "d", ".", "Directory to store output file")
 	cmd.PersistentFlags().StringVarP(&flags.OutputFormat, "format", "f", "json", "Output format (json, yaml/yml)")
 	cmd.PersistentFlags().StringVarP(&flags.OutputFilePrefix, "output-prefix", "p", "", "Custom prefix for output file (default: cluster name)")
-	cmd.PersistentFlags().StringVarP(&flags.LogLevel, "log-level", "l", "info", "Log level (debug, info, warn, error, fatal)")
-	// add flag so user can simply pass --no-progress to disabled the progress bar
+	cmd.PersistentFlags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode")
 	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar")
 
 	// Add the version command to every instance

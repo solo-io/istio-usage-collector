@@ -27,6 +27,8 @@ import (
 
 // GatherClusterInfo gathers information about the Kubernetes cluster
 func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
+	logging.Debug("Gathering cluster info for %s", cfg.KubeContext)
+
 	// Initialize the cluster info
 	clusterInfo := models.NewClusterInfo()
 
@@ -110,6 +112,8 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 
 // loadExistingData loads cluster info from an existing file - used for --continue flag
 func loadExistingData(fileName string) (*models.ClusterInfo, error) {
+	logging.Debug("Loading existing data from %s", fileName)
+
 	// Check if file exists
 	_, err := os.Stat(fileName)
 	if os.IsNotExist(err) {
@@ -145,6 +149,8 @@ func loadExistingData(fileName string) (*models.ClusterInfo, error) {
 
 // processNodes processes all nodes in the cluster
 func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, clusterInfo *models.ClusterInfo, cfg *utils.Config, hasMetrics bool) error {
+	logging.Debug("Processing nodes for cluster %s", cfg.KubeContext)
+
 	// Check if the context is cancelled
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -163,8 +169,11 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	}
 
 	// Set up progress tracking
-	progress := logging.NewProgress("Processing nodes", totalNodes)
-	logging.Info("Found %d nodes to process", totalNodes)
+	var progress *logging.Progress
+	if !cfg.NoProgress {
+		progress = logging.NewProgress("Processing nodes", totalNodes)
+		logging.Info("Found %d nodes to process", totalNodes)
+	}
 
 	var processedCount int32
 
@@ -183,7 +192,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	concurrentLimit := runtime.NumCPU() * 2
 	semaphore := make(chan struct{}, concurrentLimit)
 
-	logging.Info("Processing nodes with up to %d concurrent requests", concurrentLimit)
+	logging.Debug("Processing nodes with up to %d concurrent requests", concurrentLimit)
 
 	// Process each node
 	for _, node := range nodes.Items {
@@ -195,15 +204,21 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 		outNodeName := node.Name
 		if cfg.ObfuscateNames {
 			outNodeName = ObfuscateName(node.Name)
+			logging.Debug("Obfuscated node name %s to %s", node.Name, outNodeName)
 		}
 
 		// Check if we should skip this node if continuing
 		if cfg.ContinueProcessing {
 			if _, ok := clusterInfo.Nodes[outNodeName]; ok {
+				logging.Debug("Node %s has already previously been processed, skipping", node.Name)
 				// Increment counter but don't process this as it has already been processed
 				atomic.AddInt32(&processedCount, 1)
-				progress.Update(int(atomic.LoadInt32(&processedCount)))
+				if progress != nil {
+					progress.Update(int(atomic.LoadInt32(&processedCount)))
+				}
 				continue
+			} else {
+				logging.Debug("Node %s has not previously been processed, processing", node.Name)
 			}
 		}
 
@@ -225,7 +240,9 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 
 			// Update progress
 			count := atomic.AddInt32(&processedCount, 1)
-			progress.Update(int(count))
+			if progress != nil {
+				progress.Update(int(count))
+			}
 
 			if err != nil {
 				logging.Warn("Failed to process node %s: %v", node.Name, err)
@@ -255,7 +272,9 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 	}
 
 	// Complete the progress bar
-	progress.Complete()
+	if progress != nil {
+		progress.Complete()
+	}
 
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors processing nodes", len(errors))
@@ -277,15 +296,18 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		return fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
-	if len(namespaces.Items) == 0 {
+	totalNamespaces := len(namespaces.Items)
+	if totalNamespaces == 0 {
 		logging.Warn("No namespaces found in cluster %s", cfg.KubeContext)
 		return nil
 	}
 
 	// Set up progress tracking
-	totalNamespaces := len(namespaces.Items)
-	progress := logging.NewProgress("Processing namespaces", totalNamespaces)
-	logging.Info("Found %d namespaces to process", totalNamespaces)
+	var progress *logging.Progress
+	if !cfg.NoProgress {
+		progress = logging.NewProgress("Processing namespaces", totalNamespaces)
+		logging.Info("Found %d namespaces to process", totalNamespaces)
+	}
 
 	// Use an atomic counter for progress
 	var processedCount int32
@@ -305,7 +327,7 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 	concurrentLimit := runtime.NumCPU() * 4
 	semaphore := make(chan struct{}, concurrentLimit)
 
-	logging.Info("Processing namespaces with up to %d concurrent requests", concurrentLimit)
+	logging.Debug("Processing namespaces with up to %d concurrent requests", concurrentLimit)
 	for _, ns := range namespaces.Items {
 		// Check parent context for cancellation before spawning more goroutines
 		if ctx.Err() != nil {
@@ -320,10 +342,15 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		// Check if we should skip this namespace if continuing
 		if cfg.ContinueProcessing {
 			if _, ok := clusterInfo.Namespaces[outNsName]; ok {
+				logging.Debug("Namespace %s has already previously been processed, skipping", ns.Name)
 				// Increment counter but don't process
 				atomic.AddInt32(&processedCount, 1)
-				progress.Update(int(atomic.LoadInt32(&processedCount)))
+				if progress != nil {
+					progress.Update(int(atomic.LoadInt32(&processedCount)))
+				}
 				continue
+			} else {
+				logging.Debug("Namespace %s has not previously been processed, processing", ns.Name)
 			}
 		}
 
@@ -343,7 +370,9 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics)
 
 			count := atomic.AddInt32(&processedCount, 1)
-			progress.Update(int(count))
+			if progress != nil {
+				progress.Update(int(count))
+			}
 
 			if err != nil {
 				logging.Warn("Failed to process namespace %s: %v", namespace.Name, err)
@@ -370,7 +399,10 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 		}
 	}
 
-	progress.Complete()
+	// Complete the progress bar
+	if progress != nil {
+		progress.Complete()
+	}
 
 	if len(errors) > 0 {
 		return fmt.Errorf("encountered %d errors processing namespaces", len(errors))
@@ -398,6 +430,12 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 		isIstioInjected = true
 	}
 
+	if isIstioInjected {
+		logging.Debug("Namespace %s has Istio injection enabled", namespace)
+	} else {
+		logging.Debug("Namespace %s has no Istio injection", namespace)
+	}
+
 	// Get pods in the namespace
 	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -411,6 +449,7 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 
 	var metricsData *v1beta1.PodMetricsList
 	if hasMetrics && metricsClient != nil {
+		logging.Debug("Getting metrics for namespace %s", namespace)
 		// Get metrics in a safe way with retry logic
 		metricsData, err = getMetricsWithRetries(ctx, metricsClient, namespace)
 		if err != nil {
@@ -566,12 +605,12 @@ func getMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clientse
 
 		// Check if error is likely to be permanent (not found, forbidden, etc.)
 		if errors.IsNotFound(lastErr) || errors.IsForbidden(lastErr) || errors.IsUnauthorized(lastErr) {
-			logging.Warn("Permanent error getting metrics for namespace %s: %v", namespace, lastErr)
+			logging.Debug("Permanent error getting metrics for namespace %s: %v", namespace, lastErr)
 			return nil, lastErr
 		}
 
 		// Log the retry attempt
-		logging.Warn("Failed to get metrics for namespace %s (attempt %d/%d): %v",
+		logging.Debug("Failed to get metrics for namespace %s (attempt %d/%d): %v",
 			namespace, attempt+1, maxRetries, lastErr)
 
 		// Last attempt - don't sleep
@@ -730,6 +769,7 @@ func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node co
 	}
 	if instanceType == "" {
 		instanceType = "unknown"
+		logging.Debug("Instance type not found for node %s", node.Name)
 	}
 
 	region := labels["topology.kubernetes.io/region"]
@@ -738,6 +778,7 @@ func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node co
 	}
 	if region == "" {
 		region = "unknown"
+		logging.Debug("Region not found for node %s", node.Name)
 	}
 
 	zone := labels["topology.kubernetes.io/zone"]
@@ -746,6 +787,7 @@ func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node co
 	}
 	if zone == "" {
 		zone = "unknown"
+		logging.Debug("Zone not found for node %s", node.Name)
 	}
 
 	// Get CPU and memory capacity
@@ -793,12 +835,12 @@ func getNodeMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clie
 
 		// Check if error is likely to be permanent
 		if errors.IsNotFound(lastErr) || errors.IsForbidden(lastErr) || errors.IsUnauthorized(lastErr) {
-			logging.Warn("Permanent error getting metrics for node %s: %v", nodeName, lastErr)
+			logging.Debug("Permanent error getting metrics for node %s: %v", nodeName, lastErr)
 			return nil, lastErr
 		}
 
 		// Log the retry attempt
-		logging.Warn("Failed to get metrics for node %s (attempt %d/%d): %v",
+		logging.Debug("Failed to get metrics for node %s (attempt %d/%d): %v",
 			nodeName, attempt+1, maxRetries, lastErr)
 
 		// Last attempt - don't sleep

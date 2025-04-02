@@ -48,6 +48,8 @@ This data is collected into a JSON or YAML file that can be used for further ana
 - `--format` or `-f`: Output format (json, yaml/yml) (default: json).
 - `--output-prefix` or `-p`: Custom prefix for output files (default: cluster name).
 - `--help` or `-h`: Show help message.
+- `--log-level` or `-l`: Set the log level (info, warn, debug, error - default: info).
+- `--no-progress`: Disable the progress bar.
 
 ### Example
 

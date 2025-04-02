@@ -19,4 +19,7 @@ type Config struct {
 
 	// OutputFilePrefix is the prefix for the output file name
 	OutputFilePrefix string
+
+	// NoProgress indicates whether to disable the progress bar
+	NoProgress bool
 }

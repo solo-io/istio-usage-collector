@@ -30,6 +30,8 @@ type CommandFlags struct {
 	OutputDir          string
 	OutputFormat       string
 	OutputFilePrefix   string
+	LogLevel           string
+	NoProgress         bool
 }
 
 // DefaultFlags returns a CommandFlags struct initialized with default values
@@ -41,6 +43,8 @@ func DefaultFlags() *CommandFlags {
 		OutputDir:          ".",
 		OutputFormat:       "json",
 		OutputFilePrefix:   "",
+		LogLevel:           "info",
+		NoProgress:         false,
 	}
 }
 
@@ -101,6 +105,11 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 				cancel()
 			}()
 
+			// defining the log level
+			if flags.LogLevel != "" {
+				logging.SetLevel(flags.LogLevel)
+			}
+
 			// If context is not specified, use current context
 			if flags.KubeContext == "" {
 				var err error
@@ -142,6 +151,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 				OutputDir:          flags.OutputDir,
 				OutputFormat:       flags.OutputFormat,
 				OutputFilePrefix:   prefix,
+				NoProgress:         flags.NoProgress,
 			}
 
 			// Gather cluster information
@@ -162,6 +172,9 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&flags.OutputDir, "output-dir", "d", ".", "Directory to store output file")
 	cmd.PersistentFlags().StringVarP(&flags.OutputFormat, "format", "f", "json", "Output format (json, yaml/yml)")
 	cmd.PersistentFlags().StringVarP(&flags.OutputFilePrefix, "output-prefix", "p", "", "Custom prefix for output file (default: cluster name)")
+	cmd.PersistentFlags().StringVarP(&flags.LogLevel, "log-level", "l", "info", "Log level (debug, info, warn, error, fatal)")
+	// add flag so user can simply pass --no-progress to disabled the progress bar
+	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar")
 
 	// Add the version command to every instance
 	cmd.AddCommand(CreateVersionCommand())

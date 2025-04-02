@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/logging"
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/models"
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/utils"
+	"github.com/solo-io/istio-usage-collector/internal/logging"
+	"github.com/solo-io/istio-usage-collector/internal/models"
+	"github.com/solo-io/istio-usage-collector/internal/utils"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

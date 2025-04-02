@@ -1,4 +1,4 @@
-module github.com/solo-io/ambient-migration-estimator-snapshot
+module github.com/solo-io/istio-usage-collector
 
 go 1.23.5
 

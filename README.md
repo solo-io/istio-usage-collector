@@ -1,10 +1,10 @@
-# Ambient Mesh Migration Estimator Snapshot
+# Istio Usage Collector
 
 This tool collects information from your Kubernetes clusters to analyze resource usage and help estimate the cost and resources required for migrating to ambient mesh.
 
 ## Description
 
-The Ambient Migration Estimator Snapshot is a Go implementation of the [`gather-cluster-info.sh` script](https://github.com/solo-io/scripts-public/blob/4c728ffca1babab525687063f99ac3e24fda3fa1/ambient-mesh/migration/v1/gather-cluster-info.sh). It gathers non-sensitive information about your Kubernetes cluster, including:
+The Istio Usage Collector is a Go implementation of the [`gather-cluster-info.sh` script](https://github.com/solo-io/scripts-public/blob/4c728ffca1babab525687063f99ac3e24fda3fa1/ambient-mesh/migration/v1/gather-cluster-info.sh). It gathers non-sensitive information about your Kubernetes cluster, including:
 
 - Node information (instance type, region, zone, CPU, memory)
 - Namespace information
@@ -12,7 +12,7 @@ The Ambient Migration Estimator Snapshot is a Go implementation of the [`gather-
 - Resource requests and usage
 - Istio sidecar information
 
-This data is collected into a JSON file that can be used for further analysis through our detailed migration estimator tool
+This data is collected into a JSON or YAML file that can be used for further analysis through our detailed migration estimator tool.
 
 ## Installation
 
@@ -20,8 +20,8 @@ This data is collected into a JSON file that can be used for further analysis th
 
 1. Clone the repository:
    ```
-   git clone https://github.com/solo-io/ambient-migration-estimator-snapshot.git
-   cd ambient-migration-estimator-snapshot
+   git clone https://github.com/solo-io/istio-usage-collector.git
+   cd istio-usage-collector
    ```
 
 2. Build the binary:
@@ -32,8 +32,12 @@ This data is collected into a JSON file that can be used for further analysis th
 ## Usage
 
 ```
-./ambient-migration-estimator [flags]
+./istio-usage-collector [subcommand] [flags]
 ```
+
+### Subcommand
+
+- `version`: Print the version information of the tool.
 
 ### Flags
 
@@ -49,28 +53,26 @@ This data is collected into a JSON file that can be used for further analysis th
 
 ```bash
 # Use the current context with default JSON output
-./ambient-migration-estimator
-
-# Use a specific context
-./ambient-migration-estimator --context=my-cluster
-
-# Output in YAML format
-./ambient-migration-estimator --format=yaml
-
-# Output in CSV format to a specific directory
-./ambient-migration-estimator --format=csv --output-dir=/tmp/cluster-data
-
-# Specify a custom output file prefix (name)
-./ambient-migration-estimator --output-prefix=prod-cluster --format=json
-
-# Hide sensitive names and save to custom location
-./ambient-migration-estimator --hide-names --output-dir=/reports --format=yaml
-
-# Continue an interrupted collection
-./ambient-migration-estimator --continue
+./istio-usage-collector
 
 # Get the version information
-./ambient-migration-estimator version
+./istio-usage-collector version
+
+# Use a specific context - this would scan `my-cluster` and be saved as ./my-cluster.json
+./istio-usage-collector --context my-cluster
+
+# Output in YAML format - this would be saved as ./<cluster>.yaml
+./istio-usage-collector --format yaml
+
+# Specify a custom output file prefix (name) - this would be saved as ./prod-cluster.json
+./istio-usage-collector --output-prefix prod-cluster --format json
+
+# Hide sensitive names and save to custom location - this would be saved as /reports/<hashed-cluster>.yaml
+./istio-usage-collector --hide-names --output-dir /reports --format yaml
+
+# Continue an interrupted collection
+# Note that in order to successfully continue, the original flags must be passed as well.
+./istio-usage-collector --continue
 ```
 
 ## Output
@@ -79,9 +81,6 @@ The tool generates output files containing the collected information:
 
 - JSON format: `<cluster-name>.json` (default)
 - YAML format: `<cluster-name>.yaml`
-- CSV format:
-  - `<cluster-name>-namespaces.csv` - Contains namespace-level information
-  - `<cluster-name>-nodes.csv` - Contains node-level information
 
 ### JSON Output Structure
 

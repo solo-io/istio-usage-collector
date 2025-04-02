@@ -91,23 +91,21 @@ jobs:
           GOARCH: ${{ matrix.platform.arch }}
           VERSION: ${{ needs.set-version.outputs.version }}
         run: |
-          # if pack is true, use build-and-pack target, otherwise use build target
+          # if pack is true, use build-and-pack target (which compresses the binary), otherwise use build target
           if [ "${{ matrix.platform.pack }}" = "true" ]; then
             make build-and-pack
           else
             make build
           fi
-      # TODO: Update with google login and push to gcs, maybe as a separate job so we don't log in during matrix.. _if_ jobs share state, we can set a google login job before this, and just push to gcs from here.
       - name: Upload binary to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Define binary path
-          BINARY_PATH="_output/${{ needs.set-version.outputs.version }}/ambient-migration-estimator-snapshot-${{ matrix.platform.os }}-${{ matrix.platform.arch }}"
+          BINARY_PATH="_output/${{ needs.set-version.outputs.version }}/istio-usage-collector-${{ matrix.platform.os }}-${{ matrix.platform.arch }}"
 
           # For Windows, add .exe extension when uploading
           if [ "${{ matrix.platform.os }}" = "windows" ]; then
-            # Rename the file to add .exe extension
             mv "$BINARY_PATH" "${BINARY_PATH}.exe"
             BINARY_PATH="${BINARY_PATH}.exe"
           fi

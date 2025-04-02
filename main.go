@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/solo-io/ambient-migration-estimator-snapshot/cmd/root"
+	"github.com/solo-io/istio-usage-collector/cmd/root"
 )
 
 // These variables are set during build time via -ldflags
@@ -16,7 +16,5 @@ var (
 func main() {
 	// Set the version variables for the commands
 	root.SetVersionInfo(binaryName, version, gitCommit, goVersion, buildTime)
-
-	// Execute the root command
 	root.Execute()
 }

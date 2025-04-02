@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/gatherer"
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/logging"
-	"github.com/solo-io/ambient-migration-estimator-snapshot/internal/utils"
+	"github.com/solo-io/istio-usage-collector/internal/gatherer"
+	"github.com/solo-io/istio-usage-collector/internal/logging"
+	"github.com/solo-io/istio-usage-collector/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +56,7 @@ func SetVersionInfo(binary, ver, commit, goVer, built string) {
 	buildTime = built
 }
 
-// GetCommand returns the root command for the ambient-migration-estimator
+// GetCommand returns the root command for the istio-usage-collector
 // This allows it to be used as a standalone command or as a subcommand in another CLI
 // If customFlags is provided, those flags will be used instead of the default ones
 func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
@@ -69,10 +69,9 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "ambient-migration-estimator",
-		Short: "Gather Kubernetes cluster information for ambient migration estimation",
-		Long: `The ambient-migration-estimator tool collects information from your Kubernetes cluster
-to help estimate the cost and resource requirements for migrating to Ambient Mesh.`,
+		Use:          "istio-usage-collector",
+		Short:        "Gather Kubernetes cluster information for the ambient migration estimation",
+		Long:         "The istio-usage-collector tool collects information from your Kubernetes cluster to help estimate the cost and resource requirements for migrating to Ambient Mesh.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())

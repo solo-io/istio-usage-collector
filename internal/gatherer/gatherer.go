@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	v1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
@@ -58,9 +57,21 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 	}
 
 	// Create Kubernetes clients
-	clientset, metricsClient, hasMetrics, err := createKubernetesClients(ctx, cfg.KubeContext)
+	regularClient, metricsClient, hasMetrics, err := utils.CreateKubernetesClients(ctx, cfg.KubeContext)
 	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes clients: %w", err)
+		// if the client set (used for regular kubernetes operations) is nil, we can't continue, otherwise we can continue
+		if regularClient == nil {
+			return fmt.Errorf("failed to create Kubernetes clients: %w", err)
+		} else {
+			// this would occur if the metrics API is not available, which should just be a warning, we can still continue processing regular kubernetes operations
+			logging.Warn("Failed to create Kubernetes clients: %v", err)
+		}
+	}
+
+	if !hasMetrics {
+		logging.Warn("Metrics API not available")
+	} else {
+		logging.Info("Metrics API available")
 	}
 
 	// Get cluster name
@@ -79,7 +90,7 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 
 	// Process namespaces concurrently
 	logging.Info("Gathering namespace information")
-	err = processNamespaces(ctxWithTimeout, clientset, metricsClient, clusterInfo, cfg, hasMetrics)
+	err = processNamespaces(ctxWithTimeout, regularClient, metricsClient, clusterInfo, cfg, hasMetrics)
 	if err != nil {
 		if ctxWithTimeout.Err() != nil {
 			return fmt.Errorf("namespace processing cancelled: %w", ctxWithTimeout.Err())
@@ -89,7 +100,7 @@ func GatherClusterInfo(ctx context.Context, cfg *utils.Config) error {
 
 	// Process nodes concurrently
 	logging.Info("Gathering node information")
-	err = processNodes(ctxWithTimeout, clientset, metricsClient, clusterInfo, cfg, hasMetrics)
+	err = processNodes(ctxWithTimeout, regularClient, metricsClient, clusterInfo, cfg, hasMetrics)
 	if err != nil {
 		if ctxWithTimeout.Err() != nil {
 			return fmt.Errorf("node processing cancelled: %w", ctxWithTimeout.Err())
@@ -617,65 +628,6 @@ func getMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clientse
 	}
 
 	return nil, fmt.Errorf("failed to get metrics after %d attempts: %w", maxRetries, lastErr)
-}
-
-// createKubernetesClients creates Kubernetes clients for the specified context
-func createKubernetesClients(ctx context.Context, kubeContext string) (*kubernetes.Clientset, *metricsv.Clientset, bool, error) {
-	// Get kubeconfig path
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		home := os.Getenv("HOME")
-		if home == "" {
-			return nil, nil, false, fmt.Errorf("HOME environment variable not set")
-		}
-		kubeconfigPath = fmt.Sprintf("%s/.kube/config", home)
-	}
-
-	// Build config
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
-		&clientcmd.ConfigOverrides{CurrentContext: kubeContext}).ClientConfig()
-	if err != nil {
-		return nil, nil, false, fmt.Errorf("failed to create Kubernetes config: %w", err)
-	}
-
-	// Increase QPS and burst to avoid client-side throttling
-	config.QPS = 100
-	config.Burst = 100
-
-	// Create clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, nil, false, fmt.Errorf("failed to create Kubernetes clientset: %w", err)
-	}
-
-	// Verify the connection
-	_, err = clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{Limit: 1})
-	if err != nil {
-		return nil, nil, false, fmt.Errorf("failed to connect to Kubernetes API server: %w", err)
-	}
-
-	// Create metrics client
-	metricsClient, err := metricsv.NewForConfig(config)
-	if err != nil {
-		// If the metrics API is not available for whatever reason, we return the regular clientset for usage
-		logging.Warn("Failed to create metrics client: %v", err)
-		return clientset, nil, false, nil
-	}
-
-	// Check if metrics API is available by calling the metrics API
-	hasMetrics := false
-	if metricsClient != nil {
-		_, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{Limit: 1})
-		hasMetrics = err == nil
-		if hasMetrics {
-			logging.Info("Metrics API available")
-		} else {
-			logging.Warn("Metrics API not available: %v", err)
-		}
-	}
-
-	return clientset, metricsClient, hasMetrics, nil
 }
 
 // getClusterName gets the name of the current cluster

@@ -6,15 +6,12 @@ import (
 
 // These variables are set during build time via -ldflags
 var (
-	binaryName string = "n/a"
-	version    string = "n/a"
-	buildTime  string = "n/a"
-	gitCommit  string = "n/a"
-	goVersion  string = "n/a"
+	version   string = "n/a"
+	gitCommit string = "n/a"
 )
 
 func main() {
 	// Set the version variables for the commands
-	root.SetVersionInfo(binaryName, version, gitCommit, goVersion, buildTime)
+	root.SetVersionInfo(version, gitCommit)
 	root.Execute()
 }

@@ -14,15 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// These variables are set during build time via -ldflags
-var (
-	binaryName = "n/a"
-	version    = "n/a"
-	buildTime  = "n/a"
-	gitCommit  = "n/a"
-	goVersion  = "n/a"
-)
-
 type CommandFlags struct {
 	HideNames          bool
 	ContinueProcessing bool
@@ -50,15 +41,6 @@ func DefaultFlags() *CommandFlags {
 
 // internalFlags is used for standalone CLI usage
 var internalFlags = DefaultFlags()
-
-// SetVersionInfo sets the version information for the application
-func SetVersionInfo(binary, ver, commit, goVer, built string) {
-	binaryName = binary
-	version = ver
-	gitCommit = commit
-	goVersion = goVer
-	buildTime = built
-}
 
 // GetCommand returns the root command for the istio-usage-collector
 // This allows it to be used as a standalone command or as a subcommand in another CLI
@@ -175,17 +157,15 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode")
 	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar")
 
-	// Add the version command to every instance
-	cmd.AddCommand(CreateVersionCommand())
-
 	return cmd
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main() when the CLI is used standalone.
 func Execute() {
-	err := GetCommand().Execute()
-	if err != nil {
+	cmd := GetCommand()
+	cmd.AddCommand(CreateVersionCommand())
+	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }

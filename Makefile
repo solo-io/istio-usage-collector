@@ -1,10 +1,8 @@
 # Build variables
 BINARY_NAME=istio-usage-collector
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev-build")
-BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-GO_VERSION=$(shell go version | awk '{print $$3}')
-LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT} -X main.goVersion=${GO_VERSION} -X main.binaryName=${BINARY_NAME} -s -w"
+LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -s -w"
 GOFLAGS=CGO_ENABLED=0
 OUTPUT_DIR=_output
 VERSION_DIR=$(OUTPUT_DIR)/$(VERSION)

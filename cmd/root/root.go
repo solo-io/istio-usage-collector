@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/solo-io/istio-usage-collector/cmd/version"
 	"github.com/solo-io/istio-usage-collector/internal/gatherer"
 	"github.com/solo-io/istio-usage-collector/internal/logging"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
@@ -164,7 +165,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 // This is called by main.main() when the CLI is used standalone.
 func Execute() {
 	cmd := GetCommand()
-	cmd.AddCommand(CreateVersionCommand())
+	cmd.AddCommand(version.GetCommand())
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}

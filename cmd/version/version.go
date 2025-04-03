@@ -1,4 +1,4 @@
-package root
+package version
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ var (
 	gitCommit = "n/a"
 )
 
-// CreateVersionCommand creates and returns the version command
-func CreateVersionCommand() *cobra.Command {
+// GetCommand creates and returns the version command
+func GetCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the version information",

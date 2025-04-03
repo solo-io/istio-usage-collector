@@ -2,8 +2,6 @@ package version
 
 import (
 	"fmt"
-
-	"github.com/spf13/cobra"
 )
 
 // These variables are set during build time via -ldflags
@@ -12,14 +10,7 @@ var (
 	gitCommit = "n/a"
 )
 
-// GetCommand creates and returns the version command
-func GetCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print the version information",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Version: %s\n", version)
-			fmt.Printf("Git commit: %s\n", gitCommit)
-		},
-	}
+// VersionTemplate returns the version template for the command, used to print the version information via the --version flag
+func VersionTemplate() string {
+	return fmt.Sprintf("Version: %s\nGit commit: %s\n", version, gitCommit)
 }

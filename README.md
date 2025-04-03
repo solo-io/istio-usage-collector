@@ -35,12 +35,9 @@ This data is collected into a JSON or YAML file that can be used for further ana
 ./istio-usage-collector [subcommand] [flags]
 ```
 
-### Subcommand
-
-- `version`: Print the version information of the tool.
-
 ### Flags
 
+- `--version` or `-v`: Print the version information.
 - `--hide-names` or `-n`: Hide the names of the cluster and namespaces using a hash.
 - `--continue` or `-c`: If the script was interrupted, continue processing from the last saved state.
 - `--context` or `-k`: Kubernetes context to use (if not set, uses current context).

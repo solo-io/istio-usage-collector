@@ -1,4 +1,4 @@
-package root
+package cmd
 
 import (
 	"context"
@@ -165,7 +165,10 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 // This is called by main.main() when the CLI is used standalone.
 func Execute() {
 	cmd := GetCommand()
-	cmd.AddCommand(version.GetCommand())
+
+	cmd.Version = "n/a" // This needs to be set so that the --version flag works when setting the version template
+	cmd.SetVersionTemplate(version.VersionTemplate())
+
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}

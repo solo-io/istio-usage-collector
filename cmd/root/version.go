@@ -12,12 +12,6 @@ var (
 	gitCommit = "n/a"
 )
 
-// SetVersionInfo sets the version information for the application
-func SetVersionInfo(ver, commit string) {
-	version = ver
-	gitCommit = commit
-}
-
 // CreateVersionCommand creates and returns the version command
 func CreateVersionCommand() *cobra.Command {
 	return &cobra.Command{

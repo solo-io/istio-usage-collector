@@ -2,7 +2,7 @@
 BINARY_NAME=istio-usage-collector
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev-build")
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -s -w"
+LDFLAGS=-ldflags "-X github.com/solo-io/istio-usage-collector/cmd/root.version=${VERSION} -X github.com/solo-io/istio-usage-collector/cmd/root.gitCommit=${GIT_COMMIT} -s -w"
 GOFLAGS=CGO_ENABLED=0
 OUTPUT_DIR=_output
 VERSION_DIR=$(OUTPUT_DIR)/$(VERSION)

@@ -1,0 +1,5 @@
+ci:
+- Set up release workflow with binary distribution
+
+enhancements:
+- Implement the initial cluster info gathering

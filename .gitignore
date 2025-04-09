@@ -24,3 +24,5 @@ cluster_info.json
 
 # Output directory
 _output/
+
+junit-go-test.xml

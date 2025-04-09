@@ -6,10 +6,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestRootCommandFlags verifies that flags are parsed correctly *without* executing RunE.
+// TestRootCommandFlags verifies that flags are available on the root command
+func TestRootCommandFlags(t *testing.T) {
+	cmd := GetCommand()
+	assert.NotNil(t, cmd.Flag("hide-names"))
+	assert.NotNil(t, cmd.Flag("continue"))
+	assert.NotNil(t, cmd.Flag("context"))
+	assert.NotNil(t, cmd.Flag("output-dir"))
+	assert.NotNil(t, cmd.Flag("format"))
+	assert.NotNil(t, cmd.Flag("output-prefix"))
+	assert.NotNil(t, cmd.Flag("debug"))
+	assert.NotNil(t, cmd.Flag("no-progress"))
+
+	assert.Nil(t, cmd.Flag("version")) // This is only set for builds in standalone mode, not part of the command in general
+}
+
+// TestRootCommandFlagParsing verifies that flags are parsed correctly *without* executing RunE.
 // Note: When executing RunE, unit tests become unreliable due to this tool using actual kubectl commands so we can't test against
 // any contexts, as they may not exist. Execution tests are handled in e2e tests.
-func TestRootCommandFlags(t *testing.T) {
+func TestRootCommandFlagParsing(t *testing.T) {
+	// Test parsing of flags
 	tests := []struct {
 		name          string
 		args          []string

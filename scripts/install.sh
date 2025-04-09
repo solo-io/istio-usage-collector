@@ -22,17 +22,40 @@ if [ "${VERSION}" = "latest" ] || [ -z "${VERSION}" ]; then
   fi
   # Use the first line as the latest version
   VERSION=$(echo "$AVAILABLE_VERSIONS" | head -n1)
-  echo "Latest version is ${VERSION}"
+  echo "Latest version is: ${VERSION}"
 else
-  echo "Using specified version ${VERSION}"
+  echo "Using specified version: ${VERSION}"
 fi
 
-# TODO: Add note for windows users which will likely need to manually look into the bucket for their OS/arch
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-if [ "$OS" != "darwin" ]; then
+
+# Get the OS of the machine
+# Use the $OSTYPE variable if available, otherwise use uname
+OS=
+echo "Using OSTYPE to determine OS: ${OSTYPE}"
+if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "mingw"* ]]; then
+  OS=windows
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  OS=darwin
+elif [[ "$OSTYPE" == "linux"* ]]; then
   OS=linux
+else
+  echo "Running on an unknown operating system"
 fi
 
+# If the OS is still not set (not found in the OSTYPE check), use uname to determine OS
+if [ -z "$OS" ]; then
+  echo "Using uname to determine OS"
+
+  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  # if its cygwun, mysys, or mingw, set it to windows; otherwise, if its not darwin, set it to linux
+  if [ "$OS" = "cygwin" ] || [ "$OS" = "msys" ] || [ "$OS" = "mingw" ]; then
+    OS=windows
+  elif [ "$OS" != "darwin" ]; then
+    OS=linux
+  fi
+fi
+
+# Get the architecture of the machine
 if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
   GOARCH=arm64
 else

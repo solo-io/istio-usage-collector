@@ -3,10 +3,36 @@ set -eu
 
 DEFAULT_BUCKET="istio-usage-collector"
 
-# Allow user to override the version via environment variable
 VERSION="${VERSION:-}"
 GCS_BUCKET="${GCS_BUCKET:-$DEFAULT_BUCKET}"
 BINARY_NAME="istio-usage-collector"
+
+# Initialize override variables
+OS_OVERRIDE=""
+ARCH_OVERRIDE=""
+
+# Parse command-line arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --os)
+            OS_OVERRIDE="$2"
+            shift 2
+            ;;
+        --arch)
+            ARCH_OVERRIDE="$2"
+            shift 2
+            ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--os <os>] [--arch <arch>] [--version <version>]"
+            exit 1
+            ;;
+    esac
+done
 
 if [ "${VERSION}" = "latest" ] || [ -z "${VERSION}" ]; then
   echo "Finding latest version..."
@@ -29,40 +55,54 @@ fi
 
 
 # Get the OS of the machine
-# Use the $OSTYPE variable if available, otherwise use uname
-OS=
-echo "Using OSTYPE to determine OS: ${OSTYPE}"
-if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "mingw"* ]]; then
-  OS=windows
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  OS=darwin
-elif [[ "$OSTYPE" == "linux"* ]]; then
-  OS=linux
+OS=""
+if [ -n "$OS_OVERRIDE" ]; then
+  echo "Using OS override: ${OS_OVERRIDE}"
+  OS="$OS_OVERRIDE"
 else
-  echo "Running on an unknown operating system"
-fi
-
-# If the OS is still not set (not found in the OSTYPE check), use uname to determine OS
-if [ -z "$OS" ]; then
-  echo "Using uname to determine OS"
-
-  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  # if its cygwun, mysys, or mingw, set it to windows; otherwise, if its not darwin, set it to linux
-  if [ "$OS" = "cygwin" ] || [ "$OS" = "msys" ] || [ "$OS" = "mingw" ]; then
+  echo "Using OSTYPE to determine OS: ${OSTYPE}"
+  if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "mingw"* ]]; then
     OS=windows
-  elif [ "$OS" != "darwin" ]; then
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    OS=darwin
+  elif [[ "$OSTYPE" == "linux"* ]]; then
     OS=linux
+  else
+    echo "Running on an unknown operating system based on OSTYPE"
+  fi
+
+  # If the OS is still not set (not found in the OSTYPE check), use uname to determine OS
+  if [ -z "$OS" ]; then
+    echo "Using uname to determine OS"
+
+    detected_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    # if its cygwun, mysys, or mingw, set it to windows; otherwise, if its not darwin, set it to linux
+    if [ "$detected_os" = "cygwin" ] || [ "$detected_os" = "msys" ] || [ "$detected_os" = "mingw" ]; then
+      OS=windows
+    elif [ "$detected_os" != "darwin" ]; then
+      OS=linux
+    else # It must be darwin if not the others
+      OS=darwin
+    fi
   fi
 fi
 
 # Get the architecture of the machine
-if [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
-  GOARCH=arm64
+GOARCH=""
+if [ -n "$ARCH_OVERRIDE" ]; then
+  echo "Using ARCH override: ${ARCH_OVERRIDE}"
+  GOARCH="$ARCH_OVERRIDE"
 else
-  GOARCH=amd64
+  detected_arch="$(uname -m)"
+  echo "Using uname -m to determine ARCH: ${detected_arch}"
+  if [ "$detected_arch" = "aarch64" ] || [ "$detected_arch" = "arm64" ]; then
+    GOARCH=arm64
+  else
+    GOARCH=amd64
+  fi
 fi
 
-echo "Detected OS: ${OS}, Arch: ${GOARCH}"
+echo "OS: ${OS}, Arch: ${GOARCH}, Version: ${VERSION}"
 
 filename="${BINARY_NAME}-${OS}-${GOARCH}"
 url="https://storage.googleapis.com/${GCS_BUCKET}/${VERSION}/${filename}"
@@ -125,9 +165,3 @@ echo ""
 echo "You can run it directly using:"
 echo "  ./${filename} [command]"
 echo ""
-
-exit 0
-
-# This part should not be reached if successful
-echo "Error: Could not find or download a suitable version of ${BINARY_NAME}." >&2
-exit 1

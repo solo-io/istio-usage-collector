@@ -10,21 +10,6 @@ permissions:
   contents: write
 
 jobs:
-  set-version: # Get version as first job to re-use the value without needing to re-calculate it. The version is just the tag name excluding the 'v' prefix.
-    name: Set Version for Release
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.set_version.outputs.version }}
-    timeout-minutes: 5
-    steps:
-      - id: set_version
-        run: |
-          # get the tag name without the 'v' prefix
-          version=$(echo ${{ github.event.release.tag_name }} | sed 's/v//')
-
-          echo "version=$version" >> $GITHUB_OUTPUT
-          echo "Release version used in commands is $version"
-
   update-release-notes:
     name: Update Release Notes
     runs-on: ubuntu-latest
@@ -59,7 +44,6 @@ jobs:
     name: Build Binaries
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [set-version]
     strategy:
       matrix:
         platform:
@@ -97,6 +81,11 @@ jobs:
           else
             make build
           fi
+      - name: Upload Binary Artifact # Upload the binary to artifacts, so the publish-binaries job can download it
+        uses: actions/upload-artifact@v4
+        with:
+          name: output-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
+          path: _output/${{ github.event.release.tag_name }}
 
   publish-binaries:
     name: Publish Binaries
@@ -104,7 +93,11 @@ jobs:
     timeout-minutes: 15
     needs: [build-binaries]
     steps:
-      - uses: actions/checkout@v4
+      - name: Download All Binary Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: _output/${{ github.event.release.tag_name }}
       - name: Authenticate to Google Cloud Storage
         uses: 'google-github-actions/auth@v2'
         with:
@@ -115,11 +108,11 @@ jobs:
       - name: Publish Binaries to Google Cloud Storage
         uses: 'google-github-actions/upload-cloud-storage@v2'
         with:
-          path: '_output' # Publish the version folder to the bucket
+          path: _output/
           destination: istio-usage-collector
           parent: false
           process_gcloudignore: false
-  
+
   publish-release-metadata:
     name: Publish Release Metadata
     runs-on: ubuntu-latest

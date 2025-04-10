@@ -1,3 +1,5 @@
+//go:build test || unit
+
 package gatherer
 
 import (

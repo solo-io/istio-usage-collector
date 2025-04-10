@@ -79,8 +79,11 @@ help: ## Show this help
 install-test-tools:
 	@go install gotest.tools/gotestsum@v1.12.0
 
-run-tests:
-	@gotestsum --junitfile junit-go-test.xml -- ./...
+run-unit-tests:
+	@gotestsum --junitfile junit-unit-test.xml -- -tags=unit ./...
+
+run-e2e-tests:
+	@gotestsum --junitfile junit-e2e-test.xml -- -tags=e2e ./...
 
 # Default target
 .DEFAULT_GOAL := help 

@@ -1,0 +1,117 @@
+{
+  "name": "kind-e2e-test-cluster",
+  "namespaces": {
+    "default": {
+      "is_istio_injected": false,
+      "pods": 0,
+      "resources": {
+        "regular": {
+          "containers": 0,
+          "request": {
+            "cpu": 0,
+            "memory_gb": 0
+          }
+        }
+      }
+    },
+    "istio-injected-namespace-1": {
+      "is_istio_injected": true,
+      "pods": 1,
+      "resources": {
+        "regular": {
+          "containers": 1,
+          "request": {
+            "cpu": 0.1,
+            "memory_gb": 0.09765625
+          }
+        },
+        "istio": {
+          "containers": 1,
+          "request": {
+            "cpu": 0.1,
+            "memory_gb": 0.125
+          }
+        }
+      }
+    },
+    "istio-system": {
+      "is_istio_injected": false,
+      "pods": 1,
+      "resources": {
+        "regular": {
+          "containers": 1,
+          "request": {
+            "cpu": 0.5,
+            "memory_gb": 2
+          }
+        }
+      }
+    },
+    "kube-node-lease": {
+      "is_istio_injected": false,
+      "pods": 0,
+      "resources": {
+        "regular": {
+          "containers": 0,
+          "request": {
+            "cpu": 0,
+            "memory_gb": 0
+          }
+        }
+      }
+    },
+    "kube-public": {
+      "is_istio_injected": false,
+      "pods": 0,
+      "resources": {
+        "regular": {
+          "containers": 0,
+          "request": {
+            "cpu": 0,
+            "memory_gb": 0
+          }
+        }
+      }
+    },
+    "kube-system": {
+      "is_istio_injected": false,
+      "pods": 8,
+      "resources": {
+        "regular": {
+          "containers": 8,
+          "request": {
+            "cpu": 0.9500000000000001,
+            "memory_gb": 0.283203125
+          }
+        }
+      }
+    },
+    "local-path-storage": {
+      "is_istio_injected": false,
+      "pods": 1,
+      "resources": {
+        "regular": {
+          "containers": 1,
+          "request": {
+            "cpu": 0,
+            "memory_gb": 0
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "e2e-test-cluster-control-plane": {
+      "instance_type": "unknown",
+      "region": "unknown",
+      "zone": "unknown",
+      "resources": {
+        "capacity": {
+          "cpu": 10,
+          "memory_gb": 46.96571350097656
+        }
+      }
+    }
+  },
+  "has_metrics": false
+} 

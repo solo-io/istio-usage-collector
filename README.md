@@ -25,7 +25,7 @@ curl -sL https://storage.googleapis.com/istio-usage-collector/install.sh | sh -
 
 You can also specify a release version, os, and arch to download specific version(s) by passing the relevant flags
 ```sh
-curl -sL https://storage.googleapis.com/istio-usage-collector/install.sh | sh - -- --os darwin --arch arm64 --version latest
+curl -sL https://storage.googleapis.com/istio-usage-collector/install.sh | sh -s -- --os darwin --arch arm64 --version latest
 ```
 
 ### Building from source

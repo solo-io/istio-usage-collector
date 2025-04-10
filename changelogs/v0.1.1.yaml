@@ -1,0 +1,3 @@
+ci:
+- Publish binaries to Google Cloud Storage
+- Set up install script to easily download release binaries

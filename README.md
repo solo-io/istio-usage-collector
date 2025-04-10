@@ -16,6 +16,18 @@ This data is collected into a JSON or YAML file that can be used for further ana
 
 ## Installation
 
+### Downloading release
+
+You can download the latest release for your system by passing
+```sh
+curl -sL https://storage.googleapis.com/istio-usage-collector/install.sh | sh -
+```
+
+You can also specify a release version, os, and arch to download specific version(s) by passing the relevant flags
+```sh
+curl -sL https://storage.googleapis.com/istio-usage-collector/install.sh | sh -s -- --os darwin --arch arm64 --version latest
+```
+
 ### Building from source
 
 1. Clone the repository:

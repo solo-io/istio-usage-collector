@@ -1,0 +1,2 @@
+fix:
+- Resolve issues with `go mod` due to re-publishing a release (`0.1.1`).

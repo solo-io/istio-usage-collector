@@ -43,8 +43,23 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.32.3'
+      - name: Set up Helm
+        uses: azure/setup-helm@v4.3.0
+        with:
+          version: 'v3.13.3'
+      - uses: engineerd/setup-kind@v0.6.0
+        with:
+          version: "v0.27.0"
+          skipClusterCreation: 'true'
       - name: Install dependencies
         run: make deps tidy install-test-tools
+      - name: Add test dependencies
+        shell: bash
+        run: make add-test-dependencies
       - name: Run tests
         id: tests
         shell: bash

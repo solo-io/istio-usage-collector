@@ -19,9 +19,7 @@ ifeq ($(GOOS),windows)
 	EXT=.exe
 endif
 
-.PHONY: all build clean deps tidy help cross-build cross-build-and-pack install-test-tools run-tests
-
-all: clean deps tidy test build
+.PHONY: all build clean deps tidy help cross-build cross-build-and-pack install-test-tools run-tests add-test-dependencies
 
 # builds the binary for the current platform
 build: ensure_output_dir ## Build the binary
@@ -84,6 +82,10 @@ run-unit-tests:
 
 run-e2e-tests:
 	@gotestsum --junitfile junit-e2e-test.xml -- -tags=e2e ./...
+
+add-test-dependencies:
+	@helm repo add metrics-server "https://kubernetes-sigs.github.io/metrics-server/"
+	@helm repo add istio "https://istio-release.storage.googleapis.com/charts"
 
 # Default target
 .DEFAULT_GOAL := help 

@@ -1,37 +1,35 @@
-//go:build test || e2e
-
 package e2e
 
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"testing"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
 )
 
 // runCommand executes a shell command and returns its output or an error.
-func runCommand(t *testing.T, name string, args ...string) (string, error) {
+func runCommand(t *testing.T, name string, args ...string) string {
 	cmd := exec.Command(name, args...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Logf("Command failed: %s\nOutput:\n%s", err, string(output))
-		return string(output), err
+		t.Fatalf("Command '%s %s' failed: %v\nOutput: %s", name, strings.Join(args, " "), err, string(output))
 	}
 
-	return string(output), nil
+	t.Logf("Command '%s %s' output: %s", name, strings.Join(args, " "), string(output))
+	return string(output)
 }
 
 // createKindCluster creates a Kind cluster with the given name.
-func createKindCluster(t *testing.T, clusterName string, kindConfigPath string) (kubeconfigPath string, err error) {
+func createKindCluster(t *testing.T, clusterName string, kindConfigPath string) (kubeconfigPath string) {
 	args := []string{"create", "cluster", "--name", clusterName}
 	if kindConfigPath != "" {
 		if _, statErr := os.Stat(kindConfigPath); os.IsNotExist(statErr) {
-			return "", fmt.Errorf("kind configuration file not found at '%s'", kindConfigPath)
+			t.Fatalf("kind configuration file not found at '%s'", kindConfigPath)
 		}
 
 		args = append(args, "--config", kindConfigPath)
@@ -39,23 +37,16 @@ func createKindCluster(t *testing.T, clusterName string, kindConfigPath string) 
 	args = append(args, "--wait", "5m")
 
 	// Create the cluster
-	_, err = runCommand(t, "kind", args...)
-	if err != nil {
-		return "", fmt.Errorf("failed to create kind cluster '%s': %w", clusterName, err)
-	}
+	_ = runCommand(t, "kind", args...)
 
 	// Get the kubeconfig content
-	kubeconfigContent, err := runCommand(t, "kind", "get", "kubeconfig", "--name", clusterName)
-	if err != nil {
-		_ = deleteKindCluster(t, clusterName, "") // Ignore cleanup error
-		return "", fmt.Errorf("failed to get kubeconfig for cluster '%s': %w", clusterName, err)
-	}
+	kubeconfigContent := runCommand(t, "kind", "get", "kubeconfig", "--name", clusterName)
 
 	// Create a temporary file for the kubeconfig
 	tempFile, err := os.CreateTemp("", "kubeconfig-"+clusterName+"-*.yaml")
 	if err != nil {
-		_ = deleteKindCluster(t, clusterName, "") // Ignore cleanup error
-		return "", fmt.Errorf("failed to create temp kubeconfig file: %w", err)
+		deleteKindCluster(t, clusterName, "") // Ignore cleanup error
+		t.Fatalf("failed to create temp kubeconfig file: %v", err)
 	}
 	defer tempFile.Close()
 
@@ -63,114 +54,67 @@ func createKindCluster(t *testing.T, clusterName string, kindConfigPath string) 
 
 	_, err = tempFile.WriteString(kubeconfigContent)
 	if err != nil {
-		_ = deleteKindCluster(t, clusterName, kubeconfigPath)
-		return "", fmt.Errorf("failed to write kubeconfig to temp file '%s': %w", kubeconfigPath, err)
+		deleteKindCluster(t, clusterName, kubeconfigPath)
+		t.Fatalf("failed to write kubeconfig to temp file '%s': %v", kubeconfigPath, err)
 	}
 
-	return kubeconfigPath, nil
+	return kubeconfigPath
 }
 
 // deleteKindCluster deletes the Kind cluster with the given name and removes the associated temp kubeconfig file.
-func deleteKindCluster(t *testing.T, clusterName string, kubeconfigPath string) error {
-	_, err := runCommand(t, "kind", "delete", "cluster", "--name", clusterName)
-	if err != nil {
-		t.Logf("Failed to delete kind cluster '%s': %v", clusterName, err)
-		// Don't return error immediately, to continue trying to remove kubeconfig
-	}
+func deleteKindCluster(t *testing.T, clusterName string, kubeconfigPath string) {
+	_ = runCommand(t, "kind", "delete", "cluster", "--name", clusterName)
 
 	if kubeconfigPath != "" {
 		removeErr := os.Remove(kubeconfigPath)
 		if removeErr != nil && !os.IsNotExist(removeErr) {
-			if err == nil {
-				err = fmt.Errorf("failed to remove kubeconfig file: %w", removeErr)
-			}
+			t.Fatalf("failed to remove kubeconfig file '%s': %v", kubeconfigPath, removeErr)
 		}
 	}
-	return err
 }
 
-// installIstioWithHelm installs Istio using Helm charts - this assumes the 'istio' Helm repo is added and available.
-// TODO: Use a specific version of istio?
-func installIstio(t *testing.T, kubeconfigPath string, valuesPath string) error {
+func installIstio(t *testing.T, kubeconfigPath string, valuesPath string) {
 	istioNamespace := "istio-system"
-	t.Logf("Installing Istio using Helm with values file: %s", valuesPath)
 
 	// Check if values file exists
 	if _, err := os.Stat(valuesPath); os.IsNotExist(err) {
-		return fmt.Errorf("helm values file not found at '%s'", valuesPath)
+		t.Fatalf("helm values file not found at '%s'", valuesPath)
 	}
 
 	// 1. Create istio-system namespace
-	_, err := runCommand(t, "kubectl", "create", "namespace", istioNamespace, "--kubeconfig", kubeconfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to create istio-system namespace: %w", err)
-	}
+	_ = runCommand(t, "kubectl", "create", "namespace", istioNamespace, "--kubeconfig", kubeconfigPath)
 
 	// 2. Install istio-base chart
-	_, err = runCommand(t, "helm", "install", "istio-base", "istio/base", "-n", istioNamespace, "--kubeconfig", kubeconfigPath, "--set", "defaultRevision=default", "--wait")
-	if err != nil {
-		return fmt.Errorf("failed to install istio-base chart: %w", err)
-	}
+	_ = runCommand(t, "helm", "install", "istio-base", "istio/base", "-n", istioNamespace, "--kubeconfig", kubeconfigPath, "--set", "defaultRevision=default", "--wait")
 
 	// 3. Install istiod chart with custom values
-	_, err = runCommand(t, "helm", "install", "istiod", "istio/istiod", "-n", istioNamespace, "-f", valuesPath, "--kubeconfig", kubeconfigPath, "--wait")
-	if err != nil {
-		return fmt.Errorf("failed to install istiod chart: %w", err)
-	}
+	_ = runCommand(t, "helm", "install", "istiod", "istio/istiod", "-n", istioNamespace, "-f", valuesPath, "--kubeconfig", kubeconfigPath, "--wait")
 
 	// 4. Wait for istiod to be fully available -- TODO: Is this enough for the sidecars to be set up?
-	_, waitErr := runCommand(t, "kubectl", "wait", "--for=condition=available", "deployment/istiod", "-n", istioNamespace, "--timeout=5m", "--kubeconfig", kubeconfigPath)
-	if waitErr != nil {
-		return fmt.Errorf("failed waiting for istiod deployment to become available after helm install: %w", waitErr)
-	}
-
-	return nil
+	_ = runCommand(t, "kubectl", "wait", "--for=condition=available", "deployment/istiod", "-n", istioNamespace, "--timeout=5m", "--kubeconfig", kubeconfigPath)
 }
 
 // installMetricsServer installs the Kubernetes Metrics Server.
-func installMetricsServer(t *testing.T, kubeconfigPath string) error {
-	// TODO: Use a specific version of metrics-server?
-	metricsServerURL := "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
-	_, err := runCommand(t, "kubectl", "apply", "-f", metricsServerURL, "--kubeconfig", kubeconfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to apply metrics-server components: %w", err)
-	}
+func installMetricsServer(t *testing.T, kubeconfigPath string) {
+	// Install the metrics-server chart
+	_ = runCommand(t, "helm", "install", "metrics-server", "metrics-server/metrics-server", "-n", "kube-system", "--kubeconfig", kubeconfigPath, "--set", "args[0]=--kubelet-insecure-tls", "--wait")
 
-	// Patch the deployment for Kind (add --kubelet-insecure-tls)
-	patch := `{"spec":{"template":{"spec":{"containers":[{"name":"metrics-server","args":["--cert-dir=/tmp","--secure-port=4443","--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname","--kubelet-use-node-status-port","--metric-resolution=15s","--kubelet-insecure-tls"]}]}}}}`
-	_, err = runCommand(t, "kubectl", "patch", "deployment", "metrics-server", "-n", "kube-system", "--type=strategic", "--patch", patch, "--kubeconfig", kubeconfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to patch metrics-server deployment: %w", err)
-	}
-
-	// Optional: Wait for metrics-server deployment to be ready -- TODO: Is this enough to get metrics?
-	_, waitErr := runCommand(t, "kubectl", "wait", "--for=condition=available", "deployment/metrics-server", "-n", "kube-system", "--timeout=2m", "--kubeconfig", kubeconfigPath)
-	if waitErr != nil {
-		return fmt.Errorf("failed to wait for metrics-server deployment to be ready: %w", waitErr)
-	}
-
-	return nil
+	// Wait for metrics-server deployment to be ready
+	_ = runCommand(t, "kubectl", "wait", "--for=condition=available", "deployment/metrics-server", "-n", "kube-system", "--timeout=2m", "--kubeconfig", kubeconfigPath)
 }
 
-// applyKubectl applies a Kubernetes YAML manifest file.
-func applyKubectl(t *testing.T, kubeconfigPath string, yamlPath string) error {
-	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
-		return fmt.Errorf("kubectl apply failed: manifest file not found at %s", yamlPath)
-	}
-
-	_, err := runCommand(t, "kubectl", "apply", "-f", yamlPath, "--kubeconfig", kubeconfigPath)
-	if err != nil {
-		return fmt.Errorf("kubectl apply failed for manifest '%s': %w", yamlPath, err)
-	}
-
-	return nil
+// applyKubectl applies a Kubernetes manifest file.
+func applyKubectl(t *testing.T, kubeconfigPath string, path string) {
+	_ = runCommand(t, "kubectl", "apply", "-f", path, "--kubeconfig", kubeconfigPath)
 }
+
+// applyKubectlWeb
 
 // runMainBinary runs the main application binary with the specified configuration.
-func runMainBinary(t *testing.T, config utils.Config, kubeconfigPath string) (outputFilePath string, err error) {
-	err = os.MkdirAll(config.OutputDir, 0755)
+func runMainBinary(t *testing.T, config utils.Config, kubeconfigPath string) string {
+	err := os.MkdirAll(config.OutputDir, 0755)
 	if err != nil {
-		return "", fmt.Errorf("failed to create output directory '%s': %w", config.OutputDir, err)
+		t.Fatalf("failed to create output directory '%s': %v", config.OutputDir, err)
 	}
 
 	// Construct command line arguments
@@ -194,50 +138,50 @@ func runMainBinary(t *testing.T, config utils.Config, kubeconfigPath string) (ou
 		args = append(args, "--no-progress")
 	}
 
-	t.Logf("Running main binary with args: %v", args)
-
 	// Execute the command from the repository root
 	cmd := exec.Command("go", args...)
 	cmd.Dir = "../../" // tests/e2e is two levels down from root -- TODO: use a better way to run the main binary
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to run main binary: %w\nOutput: %s", err, string(output))
+		t.Fatalf("failed to run main binary: %v\nOutput: %s", err, string(output))
 	}
 
 	// Determine the expected output file path based on conventions
 	outputFileName := fmt.Sprintf("%s.%s", config.OutputFilePrefix, config.OutputFormat)
-	outputFilePath = fmt.Sprintf("%s/%s", config.OutputDir, outputFileName)
+	outputFilePath := fmt.Sprintf("%s/%s", config.OutputDir, outputFileName)
 
 	// Check if the output file was actually created
 	if _, statErr := os.Stat(outputFilePath); os.IsNotExist(statErr) {
-		return "", fmt.Errorf("main binary ran but output file '%s' was not found", outputFilePath)
+		t.Fatalf("main binary ran but output file '%s' was not found", outputFilePath)
 	}
 
-	return outputFilePath, nil
+	return outputFilePath
 }
 
 // compareFiles compares the content of two JSON files using go-cmp.
-func compareFiles(t *testing.T, file1, file2 string) error {
+// TODO: Ignore namespaces (istio-system, kube-node-lease, kube-public, kube-system, local-path-storage)
+// TODO: Don't check for the values within "actual", just that if it's in the expected, it's in the output.
+func compareFiles(file1, file2 string) error {
 	content1, err := os.ReadFile(file1)
 	if err != nil {
-		return fmt.Errorf("failed to read file '%s': %w", file1, err)
+		return fmt.Errorf("failed to read file '%s': %v", file1, err)
 	}
 	content2, err := os.ReadFile(file2)
 	if err != nil {
-		return fmt.Errorf("failed to read file '%s': %w", file2, err)
+		return fmt.Errorf("failed to read file '%s': %v", file2, err)
 	}
 
 	var data1, data2 interface{}
 
 	err = json.Unmarshal(content1, &data1)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal %s as JSON: %w", file1, err)
+		return fmt.Errorf("failed to unmarshal %s as JSON: %v", file1, err)
 	}
 
 	err = json.Unmarshal(content2, &data2)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal %s as JSON: %w", file2, err)
+		return fmt.Errorf("failed to unmarshal %s as JSON: %v", file2, err)
 	}
 
 	// Compare the unmarshalled data
@@ -246,4 +190,49 @@ func compareFiles(t *testing.T, file1, file2 string) error {
 	}
 
 	return nil
+}
+
+// checkForPrerequisites checks if required CLIs are installed.
+func checkForPrerequisites(t *testing.T) {
+	requiredCmds := []string{"kind", "kubectl", "helm"}
+	for _, cmd := range requiredCmds {
+		_, err := exec.LookPath(cmd)
+		if err != nil {
+			t.Fatalf("Required command '%s' not found in PATH. Please install it.", cmd)
+		}
+	}
+
+	// Check that required helm charts are available
+	checkHelmChartAvailable(t, "istio", "https://istio-release.storage.googleapis.com/charts")
+	checkHelmChartAvailable(t, "metrics-server", "https://kubernetes-sigs.github.io/metrics-server/")
+}
+
+// checkHelmChartAvailable checks if the desired helm chart is available
+func checkHelmChartAvailable(t *testing.T, chartName string, expectedURL string) {
+	listOutput := runCommand(t, "helm", "repo", "list", "--output", "json")
+	jsonOutput := []byte(listOutput)
+
+	// parse the json
+	var jsonOutputList []struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	}
+	err := json.Unmarshal(jsonOutput, &jsonOutputList)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal helm search repo istio output to json: %v", err)
+	}
+
+	istioRepoFound, istioRepoURL := false, ""
+	for _, repo := range jsonOutputList {
+		if repo.Name == chartName {
+			istioRepoFound = true
+			istioRepoURL = repo.URL
+		}
+	}
+	if !istioRepoFound {
+		t.Fatalf("Helm chart %s not found", chartName)
+	}
+	if istioRepoURL != expectedURL {
+		t.Fatalf("Helm chart %s URL mismatch: expected %s, got %s", chartName, expectedURL, istioRepoURL)
+	}
 }

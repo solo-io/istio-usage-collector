@@ -1,5 +1,5 @@
 {
-  "name": "kind-e2e-test-cluster",
+  "name": "kind-e2e-simple-test-cluster",
   "namespaces": {
     "default": {
       "is_istio_injected": false,
@@ -101,7 +101,7 @@
     }
   },
   "nodes": {
-    "e2e-test-cluster-control-plane": {
+    "e2e-simple-test-cluster-control-plane": {
       "instance_type": "unknown",
       "region": "unknown",
       "zone": "unknown",

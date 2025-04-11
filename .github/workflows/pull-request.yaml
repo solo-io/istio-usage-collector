@@ -58,6 +58,7 @@ jobs:
           version: "v0.27.0"
           skipClusterCreation: 'true'
           skipClusterDeletion: 'true'
+          skipClusterLogsExport: 'true'
       - name: Install dependencies
         run: make deps tidy install-test-tools
       - name: Add test dependencies

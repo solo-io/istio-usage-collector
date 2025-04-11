@@ -101,8 +101,8 @@ func (s *SimpleTestSuite) TestSimpleJSONOutput() {
 		NoProgress:       true, // Disabled for cleaner test logs
 	}
 
-	retry := 30
-	waitTime := 1 * time.Second
+	retry := 10
+	waitTime := 100 * time.Millisecond
 	var lastError error
 	for i := 0; i < retry; i++ {
 		actualOutputFile := runMainBinary(s.T(), config, s.kubeconfigPath)

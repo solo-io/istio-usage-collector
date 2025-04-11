@@ -36,76 +36,6 @@
           "actual": {}
         }
       }
-    },
-    "istio-system": {
-      "is_istio_injected": false,
-      "pods": 1,
-      "resources": {
-        "regular": {
-          "containers": 1,
-          "request": {
-            "cpu": 0.5,
-            "memory_gb": 2
-          },
-          "actual": {}
-        }
-      }
-    },
-    "kube-node-lease": {
-      "is_istio_injected": false,
-      "pods": 0,
-      "resources": {
-        "regular": {
-          "containers": 0,
-          "request": {
-            "cpu": 0,
-            "memory_gb": 0
-          },
-          "actual": {}
-        }
-      }
-    },
-    "kube-public": {
-      "is_istio_injected": false,
-      "pods": 0,
-      "resources": {
-        "regular": {
-          "containers": 0,
-          "request": {
-            "cpu": 0,
-            "memory_gb": 0
-          },
-          "actual": {}
-        }
-      }
-    },
-    "kube-system": {
-      "is_istio_injected": false,
-      "pods": 9,
-      "resources": {
-        "regular": {
-          "containers": 9,
-          "request": {
-            "cpu": 0.9500000000000001,
-            "memory_gb": 0.283203125
-          },
-          "actual": {}
-        }
-      }
-    },
-    "local-path-storage": {
-      "is_istio_injected": false,
-      "pods": 1,
-      "resources": {
-        "regular": {
-          "containers": 1,
-          "request": {
-            "cpu": 0,
-            "memory_gb": 0
-          },
-          "actual": {}
-        }
-      }
     }
   },
   "nodes": {
@@ -117,7 +47,8 @@
         "capacity": {
           "cpu": 10,
           "memory_gb": 46.96571350097656
-        }
+        },
+        "actual": {}
       }
     }
   },

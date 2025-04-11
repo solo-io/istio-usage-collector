@@ -3,12 +3,16 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/solo-io/istio-usage-collector/internal/utils"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/solo-io/istio-usage-collector/internal/models"
+	"github.com/solo-io/istio-usage-collector/internal/utils"
 )
 
 // runCommand executes a shell command and returns its output or an error.
@@ -160,8 +164,6 @@ func runMainBinary(t *testing.T, config utils.Config, kubeconfigPath string) str
 }
 
 // compareFiles compares the content of two JSON files using go-cmp.
-// TODO: Ignore namespaces (istio-system, kube-node-lease, kube-public, kube-system, local-path-storage)
-// TODO: Don't check for the values within "actual", just that if it's in the expected, it's in the output.
 func compareFiles(file1, file2 string) error {
 	content1, err := os.ReadFile(file1)
 	if err != nil {
@@ -172,7 +174,7 @@ func compareFiles(file1, file2 string) error {
 		return fmt.Errorf("failed to read file '%s': %v", file2, err)
 	}
 
-	var data1, data2 interface{}
+	var data1, data2 models.ClusterInfo
 
 	err = json.Unmarshal(content1, &data1)
 	if err != nil {
@@ -184,8 +186,31 @@ func compareFiles(file1, file2 string) error {
 		return fmt.Errorf("failed to unmarshal %s as JSON: %v", file2, err)
 	}
 
+	irrelevantNamespaces := map[string]struct{}{
+		"istio-system":       {},
+		"kube-node-lease":    {},
+		"kube-public":        {},
+		"kube-system":        {},
+		"local-path-storage": {},
+	}
+
+	opts := cmp.Options{
+		// Ignore the irrelevant namespaces entirely
+		cmpopts.IgnoreMapEntries(func(key string, value *models.NamespaceInfo) bool {
+			_, irrelevant := irrelevantNamespaces[key]
+			return irrelevant
+		}),
+		// Transformer to compare only the existence (nil vs non-nil) of Actual fields (as it's nothing we can control)
+		cmp.Transformer("ActualPresence", func(in *models.Resources) bool {
+			return in != nil
+		}),
+		cmp.Transformer("NodeActualPresence", func(in *models.NodeResourceSpec) bool {
+			return in != nil
+		}),
+	}
+
 	// Compare the unmarshalled data
-	if diff := cmp.Diff(data1, data2); diff != "" {
+	if diff := cmp.Diff(data1, data2, opts); diff != "" {
 		return fmt.Errorf("JSON content mismatch between '%s' and '%s':\n--- Diff ---\n%s\n------------", file1, file2, diff)
 	}
 

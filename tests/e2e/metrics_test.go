@@ -88,7 +88,6 @@ func (s *MetricsTestSuite) TestMetricsJSONOutput() {
 	// --- Apply Input Manifests ---
 	s.T().Logf("Applying input manifest: %s", inputManifest)
 	applyKubectl(s.T(), s.kubeconfigPath, inputManifest)
-	// TODO: Add waits or checks here if needed to ensure resources are ready
 
 	// --- Run the Main Binary ---
 	s.T().Log("Running main binary...")
@@ -100,8 +99,8 @@ func (s *MetricsTestSuite) TestMetricsJSONOutput() {
 		NoProgress:       true, // Disabled for cleaner test logs
 	}
 
-	retry := 30
-	waitTime := 1 * time.Second
+	retry := 10
+	waitTime := 100 * time.Millisecond
 	var lastError error
 	for i := 0; i < retry; i++ {
 		actualOutputFile := runMainBinary(s.T(), config, s.kubeconfigPath)

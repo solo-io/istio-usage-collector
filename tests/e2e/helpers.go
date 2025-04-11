@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/solo-io/istio-usage-collector/internal/models"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"github.com/solo-io/istio-usage-collector/pkg/models"
 )
 
 // runCommand executes a shell command and returns its output or an error.
@@ -192,11 +192,16 @@ func compareFiles(file1, file2 string) error {
 			_, irrelevant := irrelevantNamespaces[key]
 			return irrelevant
 		}),
+		// We only check for the presence (nil-ness) of the actual data, because actual usage varies
 		cmp.Transformer("ActualPresence", func(in *models.Resources) bool {
 			return in != nil
 		}),
 		cmp.Transformer("NodeActualPresence", func(in *models.NodeResourceSpec) bool {
 			return in != nil
+		}),
+		// We ignore the capacity for nodes as it is dependent on the environment
+		cmp.Transformer("NodeCapacityIgnore", func(in models.NodeResourceSpec) bool {
+			return true
 		}),
 	}
 

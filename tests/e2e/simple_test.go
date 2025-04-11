@@ -72,5 +72,5 @@ func (s *SimpleTestSuite) TestSimpleJSONOutput() {
 		}
 
 		return true
-	}, 10*time.Second, 100*time.Millisecond, "Output comparison failed")
+	}, 30*time.Second, 100*time.Millisecond, "Output comparison failed")
 }

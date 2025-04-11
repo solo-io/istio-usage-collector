@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/solo-io/istio-usage-collector/internal/logging"
-	"github.com/solo-io/istio-usage-collector/internal/models"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"github.com/solo-io/istio-usage-collector/pkg/models"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -747,7 +747,10 @@ func processNode(ctx context.Context, metricsClient metricsv.Interface, node cor
 		} else if nodeMetrics != nil {
 			cpuUsage := nodeMetrics.Usage.Cpu().AsApproximateFloat64()
 			memoryUsage := float64(nodeMetrics.Usage.Memory().Value()) / (1024 * 1024 * 1024)
-			nodeInfo.SetActualNodeResources(cpuUsage, memoryUsage)
+			nodeInfo.Resources.Actual = &models.NodeResourceSpec{
+				CPU:      cpuUsage,
+				MemoryGB: memoryUsage,
+			}
 		}
 	}
 

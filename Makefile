@@ -86,6 +86,7 @@ run-e2e-tests:
 add-test-dependencies:
 	@helm repo add metrics-server "https://kubernetes-sigs.github.io/metrics-server/"
 	@helm repo add istio "https://istio-release.storage.googleapis.com/charts"
+	@helm repo update
 
 # Default target
 .DEFAULT_GOAL := help 

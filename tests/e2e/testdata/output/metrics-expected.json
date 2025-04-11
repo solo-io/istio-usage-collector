@@ -44,10 +44,7 @@
       "region": "unknown",
       "zone": "unknown",
       "resources": {
-        "capacity": {
-          "cpu": 10,
-          "memory_gb": 46.96571350097656
-        },
+        "capacity": {},
         "actual": {}
       }
     }

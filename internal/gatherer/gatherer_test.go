@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/solo-io/istio-usage-collector/internal/models"
+	"github.com/solo-io/istio-usage-collector/pkg/models"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

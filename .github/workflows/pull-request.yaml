@@ -13,6 +13,7 @@ jobs:
   unit-tests:
     name: Run Unit Tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 5 # As of 04-11-2025, tests usually complete within 1 minute, so 5 minutes is a safe timeout.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +37,7 @@ jobs:
   e2e-tests:
     name: Run E2E Tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:

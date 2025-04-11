@@ -76,11 +76,3 @@ func NewNodeInfo(instanceType, region, zone string, cpuCapacity, memoryCapacity 
 		},
 	}
 }
-
-// SetActualNodeResources sets the actual resource usage for a NodeInfo
-func (ni *NodeInfo) SetActualNodeResources(cpuUsage, memoryUsage float64) {
-	ni.Resources.Actual = &NodeResourceSpec{
-		CPU:      cpuUsage,
-		MemoryGB: memoryUsage,
-	}
-}

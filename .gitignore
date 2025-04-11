@@ -1,5 +1,7 @@
 .DS_Store
 
+.idea
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -24,3 +26,6 @@ cluster_info.json
 
 # Output directory
 _output/
+
+junit-unit-test.xml
+junit-e2e-test.xml

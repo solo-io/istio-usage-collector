@@ -19,7 +19,7 @@ jobs:
       # Using this in this smaller action to simplify the release process and not port over all the existing changelog handling from other repos.
       - name: Generate Changelog
         id: changelog
-        uses: infocus7/changelog-files-action@v2.0.0
+        uses: infocus7/changelog-files-action@v2.0.1
         with:
           release-tag-name: ${{ github.event.release.tag_name }}
           changelog-directory: changelogs

@@ -1,0 +1,76 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group: { }
+
+concurrency:
+  group: pull-request-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5 # As of 04-11-2025, tests usually complete within 1 minute, so 5 minutes is a safe timeout.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: Install dependencies
+        run: make deps tidy install-test-tools
+      - name: Run tests
+        id: tests
+        shell: bash
+        run: make run-unit-tests
+      - name: Upload Test Report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-unit-test.xml
+          path: junit-unit-test.xml
+  
+  e2e-tests:
+    name: Run E2E Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10 # As of 04-11-2025, tests usually complete around 2 minute, so 10 minutes is a safe timeout.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.32.3'
+      - name: Set up Helm
+        uses: azure/setup-helm@v4.3.0
+        with:
+          version: 'v3.13.3'
+      - uses: engineerd/setup-kind@v0.6.2
+        with:
+          version: "v0.27.0"
+          skipClusterCreation: 'true'
+          skipClusterDeletion: 'true'
+          skipClusterLogsExport: 'true'
+      - name: Install dependencies
+        run: make deps tidy install-test-tools
+      - name: Add test dependencies
+        shell: bash
+        run: make add-test-dependencies
+      - name: Run tests
+        id: tests
+        shell: bash
+        run: make run-e2e-tests
+      - name: Upload Test Report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-e2e-test.xml
+          path: junit-e2e-test.xml

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -99,26 +100,16 @@ func (s *MetricsTestSuite) TestMetricsJSONOutput() {
 		NoProgress:       true, // Disabled for cleaner test logs
 	}
 
-	retry := 10
-	waitTime := 100 * time.Millisecond
-	var lastError error
-	for i := 0; i < retry; i++ {
-		actualOutputFile := runMainBinary(s.T(), config, s.kubeconfigPath)
-		s.T().Logf("Actual output file generated: %s", actualOutputFile)
+	assert.Eventually(s.T(), func() bool {
+		actualOutputFile := runMainBinary(s.T(), config)
 
-		// --- Compare Output ---
-		s.T().Logf("Comparing actual output (%s) with expected output (%s)", actualOutputFile, expectedOutputFile)
-		lastError = compareFiles(actualOutputFile, expectedOutputFile)
-		if lastError == nil {
-			s.T().Log("Output comparison successful.")
-			break
+		if err := compareFiles(actualOutputFile, expectedOutputFile); err != nil {
+			s.T().Logf("Output comparison failed: %v", err)
+			return false
 		}
-		s.T().Logf("Output comparison failed: %v. Retrying in %v seconds...", err, waitTime.Seconds())
-		time.Sleep(waitTime)
-	}
-	if lastError != nil {
-		s.T().Fatalf("Output comparison failed after %d retries: %v", retry, lastError)
-	} else {
-		s.T().Log("TestMetricsJSONOutput completed successfully.")
-	}
+
+		return true
+	}, 10*time.Second, 100*time.Millisecond, "Output comparison failed")
+
+	s.T().Log("TestMetricsJSONOutput completed successfully.")
 }

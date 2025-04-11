@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -101,31 +102,16 @@ func (s *SimpleTestSuite) TestSimpleJSONOutput() {
 		NoProgress:       true, // Disabled for cleaner test logs
 	}
 
-	retry := 10
-	waitTime := 100 * time.Millisecond
-	var lastError error
-	for i := 0; i < retry; i++ {
-		actualOutputFile := runMainBinary(s.T(), config, s.kubeconfigPath)
-		s.T().Logf("Actual output file generated: %s", actualOutputFile)
+	assert.Eventually(s.T(), func() bool {
+		actualOutputFile := runMainBinary(s.T(), config)
 
-		// --- Compare Output ---
-		s.T().Logf("Comparing actual output (%s) with expected output (%s)", actualOutputFile, expectedOutputFile)
-		err := compareFiles(actualOutputFile, expectedOutputFile)
-		if err == nil {
-			s.T().Log("Output comparison successful.")
-			break
-		} else {
-			lastError = err
+		if err := compareFiles(actualOutputFile, expectedOutputFile); err != nil {
 			s.T().Logf("Output comparison failed: %v", err)
-			time.Sleep(waitTime)
+			return false
 		}
-	}
 
-	if lastError != nil {
-		s.T().Fatalf("Output comparison failed after %d retries: %v", retry, lastError)
-	} else {
-		s.T().Log("Output comparison successful.")
-	}
+		return true
+	}, 10*time.Second, 100*time.Millisecond, "Output comparison failed")
 
 	s.T().Log("TestSimpleJSONOutput completed successfully.")
 }

@@ -80,21 +80,14 @@ func deleteKindCluster(t *testing.T, clusterName string, kubeconfigPath string) 
 func installIstio(t *testing.T, kubeconfigPath string, valuesPath string) {
 	istioNamespace := "istio-system"
 
-	// Check if values file exists
 	if _, err := os.Stat(valuesPath); os.IsNotExist(err) {
 		t.Fatalf("helm values file not found at '%s'", valuesPath)
 	}
 
-	// 1. Create istio-system namespace
 	_ = runCommand(t, "kubectl", "create", "namespace", istioNamespace, "--kubeconfig", kubeconfigPath)
-
-	// 2. Install istio-base chart
 	_ = runCommand(t, "helm", "install", "istio-base", "istio/base", "-n", istioNamespace, "--kubeconfig", kubeconfigPath, "--set", "defaultRevision=default", "--wait")
-
-	// 3. Install istiod chart with custom values
 	_ = runCommand(t, "helm", "install", "istiod", "istio/istiod", "-n", istioNamespace, "-f", valuesPath, "--kubeconfig", kubeconfigPath, "--wait")
 
-	// 4. Wait for istiod to be fully available -- TODO: Is this enough for the sidecars to be set up?
 	_ = runCommand(t, "kubectl", "wait", "--for=condition=available", "deployment/istiod", "-n", istioNamespace, "--timeout=5m", "--kubeconfig", kubeconfigPath)
 }
 
@@ -112,10 +105,8 @@ func applyKubectl(t *testing.T, kubeconfigPath string, path string) {
 	_ = runCommand(t, "kubectl", "apply", "-f", path, "--kubeconfig", kubeconfigPath)
 }
 
-// applyKubectlWeb
-
 // runMainBinary runs the main application binary with the specified configuration.
-func runMainBinary(t *testing.T, config utils.Config, kubeconfigPath string) string {
+func runMainBinary(t *testing.T, config utils.Config) string {
 	err := os.MkdirAll(config.OutputDir, 0755)
 	if err != nil {
 		t.Fatalf("failed to create output directory '%s': %v", config.OutputDir, err)
@@ -195,12 +186,10 @@ func compareFiles(file1, file2 string) error {
 	}
 
 	opts := cmp.Options{
-		// Ignore the irrelevant namespaces entirely
 		cmpopts.IgnoreMapEntries(func(key string, value *models.NamespaceInfo) bool {
 			_, irrelevant := irrelevantNamespaces[key]
 			return irrelevant
 		}),
-		// Transformer to compare only the existence (nil vs non-nil) of Actual fields (as it's nothing we can control)
 		cmp.Transformer("ActualPresence", func(in *models.Resources) bool {
 			return in != nil
 		}),

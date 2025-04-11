@@ -1,0 +1,6 @@
+ci:
+- add positive unit and e2e tests
+- add PR workflow to run unit tests
+
+other:
+- updated resource types for gethering to interfaces in order to allow for mockup flexibility during testing

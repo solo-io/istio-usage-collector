@@ -1,3 +1,5 @@
+//go:build test || e2e
+
 package e2e
 
 import (
@@ -142,7 +144,7 @@ func runMainBinary(t *testing.T, config utils.Config) string {
 		t.Fatalf("failed to run main binary: %v\nOutput: %s", err, string(output))
 	}
 
-	// Determine the expected output file path based on conventions
+	// expected output file path based on conventions
 	outputFileName := fmt.Sprintf("%s.%s", config.OutputFilePrefix, config.OutputFormat)
 	outputFilePath := fmt.Sprintf("%s/%s", config.OutputDir, outputFileName)
 
@@ -249,4 +251,9 @@ func checkHelmChartAvailable(t *testing.T, chartName string, expectedURL string)
 	if istioRepoURL != expectedURL {
 		t.Fatalf("Helm chart %s URL mismatch: expected %s, got %s", chartName, expectedURL, istioRepoURL)
 	}
+}
+
+type testContext struct {
+	kubeResourceManifest string
+	expectedOutputFile   string
 }

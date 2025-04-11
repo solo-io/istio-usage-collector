@@ -1,3 +1,5 @@
+//go:build test || e2e
+
 package e2e
 
 import (
@@ -12,53 +14,21 @@ import (
 
 // SimpleTestSuite defines the main structure for our E2E tests
 type SimpleTestSuite struct {
-	suite.Suite
-	clusterName          string
-	kubeconfigPath       string
-	istioValuesPath      string
-	installMetricsServer bool
+	BaseTestSuite
+	clusterName   string
+	metricsServer bool
 }
 
 // SetupSuite runs once before all tests in the suite.
 func (s *SimpleTestSuite) SetupSuite() {
-	// Check for necessary prerequisites (kind, kubectl, helm)
-	checkForPrerequisites(s.T())
-
-	s.T().Log("Setting up E2E test suite...")
 	s.clusterName = "e2e-simple-test-cluster"
-	s.installMetricsServer = false
-
-	// Create kind cluster (using default config for now)
-	kubeconfigPath := createKindCluster(s.T(), s.clusterName, "") // Pass empty string for default config
-	s.kubeconfigPath = kubeconfigPath
-	s.T().Logf("Using kubeconfig: %s", s.kubeconfigPath)
-
-	// Install Istio using Helm and a values file
-	s.istioValuesPath = "testdata/input/istio-values.yaml" // Path to Helm values
-	installIstio(s.T(), s.kubeconfigPath, s.istioValuesPath)
-
-	// Optionally install Metrics Server
-	if s.installMetricsServer {
-		s.T().Log("Installing Kubernetes Metrics Server...")
-		installMetricsServer(s.T(), s.kubeconfigPath)
-		s.T().Log("Metrics Server installed successfully.")
-	} else {
-		s.T().Log("Skipping Metrics Server installation.")
-	}
-
-	s.T().Log("Suite setup complete.")
+	s.metricsServer = false
+	s.SetupBase(s.T(), s.clusterName, s.metricsServer)
 }
 
 // TearDownSuite runs once after all tests in the suite have finished.
 func (s *SimpleTestSuite) TearDownSuite() {
-	s.T().Log("Tearing down E2E test suite...")
-
-	// Delete kind cluster
-	deleteKindCluster(s.T(), s.clusterName, s.kubeconfigPath)
-	// Log error but don't fail the suite teardown if cleanup fails
-	s.T().Log("Kind cluster deleted successfully.")
-
-	s.T().Log("Suite teardown complete.")
+	s.TearDownBase(s.T(), s.clusterName)
 }
 
 // TestE2ERunner is the entry point for running the suite.
@@ -68,43 +38,34 @@ func TestSimpleTestSuiteRunner(t *testing.T) {
 
 // Example test case structure
 func (s *SimpleTestSuite) TestSimpleJSONOutput() {
-	s.T().Log("Running test: TestSimpleJSONOutput")
 	require := s.Require() // Use require for assertions within the test
 
 	// --- Test Setup ---
 	inputManifest := "testdata/input/simple-manifest.yaml"
+	expectedOutputFile := "./testdata/output/simple-expected.json"
 
 	// create temporary directory for output
 	testOutputDir, err := os.MkdirTemp("", "istio-usage-collector-e2e-test")
 	require.NoError(err, "Failed to create temporary directory for output")
 	defer os.RemoveAll(testOutputDir)
 
-	outputFilePrefix := "output"
-	outputFormat := "json"
-	expectedOutputFile := "./testdata/output/simple-expected.json"
-
-	// Clean previous output dir if it exists
-	err = os.RemoveAll(testOutputDir)
-	require.NoError(err, "Failed to clean test output directory: %s", testOutputDir)
-
 	// --- Apply Input Manifests ---
 	s.T().Logf("Applying input manifest: %s", inputManifest)
 	applyKubectl(s.T(), s.kubeconfigPath, inputManifest)
-	// TODO: Add waits or checks here if needed to ensure resources are ready
 
 	// --- Run the Main Binary ---
 	s.T().Log("Running main binary...")
 	config := utils.Config{
-		ObfuscateNames:   false,
-		OutputDir:        testOutputDir,
-		OutputFormat:     outputFormat,
-		OutputFilePrefix: outputFilePrefix,
-		NoProgress:       true, // Disabled for cleaner test logs
+		ObfuscateNames: false,
+		NoProgress:     true, // Disabled for cleaner test logs
+		OutputDir:      testOutputDir,
+		// Not necessary, but for the ease of testing (finding exact output file), setting these values
+		OutputFormat:     "json",
+		OutputFilePrefix: "output",
 	}
 
 	assert.Eventually(s.T(), func() bool {
 		actualOutputFile := runMainBinary(s.T(), config)
-
 		if err := compareFiles(actualOutputFile, expectedOutputFile); err != nil {
 			s.T().Logf("Output comparison failed: %v", err)
 			return false
@@ -112,6 +73,4 @@ func (s *SimpleTestSuite) TestSimpleJSONOutput() {
 
 		return true
 	}, 10*time.Second, 100*time.Millisecond, "Output comparison failed")
-
-	s.T().Log("TestSimpleJSONOutput completed successfully.")
 }

@@ -51,7 +51,7 @@ jobs:
         uses: azure/setup-helm@v4.3.0
         with:
           version: 'v3.13.3'
-      - uses: engineerd/setup-kind@v0.6.0
+      - uses: engineerd/setup-kind@v0.6.2
         with:
           version: "v0.27.0"
           skipClusterCreation: 'true'

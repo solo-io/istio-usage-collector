@@ -57,8 +57,8 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          "istio-usage-collector",
-		Short:        "Gather Kubernetes cluster information for the ambient migration estimation",
-		Long:         "The istio-usage-collector tool collects information from your Kubernetes cluster to help estimate the cost and resource requirements for migrating to Ambient Mesh.",
+		Short:        "Gather Kubernetes cluster information for ambient migration cost estimation.",
+		Long:         "The istio-usage-collector tool collects information from your Kubernetes cluster to help estimate the cost and resource requirements for migrating from a sidecar mesh to an ambient mesh.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -98,10 +98,10 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 				var err error
 				flags.KubeContext, err = utils.GetCurrentContext()
 				if err != nil {
-					logging.Error("No current kubectl context found: %v", err)
+					logging.Error("No current Kubernetes context found: %v", err)
 					return err
 				}
-				logging.Info("Using current context: %s", flags.KubeContext)
+				logging.Info("Using current Kubernetes context: %s", flags.KubeContext)
 			} else {
 				logging.Info("Using Kubernetes context from flags: %s", flags.KubeContext)
 			}
@@ -149,14 +149,14 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	}
 
 	// Define persistent flags for the command
-	cmd.PersistentFlags().BoolVarP(&flags.HideNames, "hide-names", "n", false, "Hide the names of the cluster and namespaces using a hash")
-	cmd.PersistentFlags().BoolVarP(&flags.ContinueProcessing, "continue", "c", false, "Continue processing from the last saved state if the script was interrupted")
-	cmd.PersistentFlags().StringVarP(&flags.KubeContext, "context", "k", "", "Kubernetes context to use (if not set, uses current context)")
-	cmd.PersistentFlags().StringVarP(&flags.OutputDir, "output-dir", "d", ".", "Directory to store output file")
-	cmd.PersistentFlags().StringVarP(&flags.OutputFormat, "format", "f", "json", "Output format (json, yaml/yml)")
-	cmd.PersistentFlags().StringVarP(&flags.OutputFilePrefix, "output-prefix", "p", "", "Custom prefix for output file (default: cluster name)")
-	cmd.PersistentFlags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode")
-	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar")
+	cmd.PersistentFlags().BoolVarP(&flags.HideNames, "hide-names", "n", false, "Hide the names of the cluster and namespaces by using a hash.")
+	cmd.PersistentFlags().BoolVarP(&flags.ContinueProcessing, "continue", "c", false, "If the script was interrupted, continue processing from the last saved state.")
+	cmd.PersistentFlags().StringVarP(&flags.KubeContext, "context", "k", "", "Kubernetes context to use. If not set, uses the current context.")
+	cmd.PersistentFlags().StringVarP(&flags.OutputDir, "output-dir", "d", ".", "Directory to store the output file in.")
+	cmd.PersistentFlags().StringVarP(&flags.OutputFormat, "format", "f", "json", "Format the output file in json or yaml/yml.")
+	cmd.PersistentFlags().StringVarP(&flags.OutputFilePrefix, "output-prefix", "p", "", "Custom prefix for the output file. If not set, uses the cluster name.")
+	cmd.PersistentFlags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode.")
+	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar while processing resources.")
 
 	return cmd
 }

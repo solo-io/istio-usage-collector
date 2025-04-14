@@ -11,8 +11,6 @@ VERSION_DIR=$(OUTPUT_DIR)/$(VERSION)
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
-GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Define extension based on OS (.exe for Windows)
@@ -21,9 +19,7 @@ ifeq ($(GOOS),windows)
 	EXT=.exe
 endif
 
-.PHONY: all build clean test lint deps tidy help cross-build cross-build-and-pack
-
-all: clean deps tidy test build
+.PHONY: all build clean deps tidy help cross-build cross-build-and-pack install-test-tools run-tests add-test-dependencies
 
 # builds the binary for the current platform
 build: ensure_output_dir ## Build the binary
@@ -39,12 +35,6 @@ build-and-pack: ensure_output_dir ## Build the binary and pack it using upx
 clean: ## Clean up build artifacts
 	$(GOCLEAN)
 	rm -rf $(OUTPUT_DIR)
-
-test: ## Run unit tests
-	$(GOTEST) -v ./...
-
-lint: ## Run linters
-	golangci-lint run ./...
 
 deps: ## Install dependencies
 	$(GOMOD) download
@@ -83,6 +73,20 @@ help: ## Show this help
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+install-test-tools:
+	@go install gotest.tools/gotestsum@v1.12.0
+
+run-unit-tests:
+	@gotestsum --junitfile junit-unit-test.xml -- -tags=unit ./...
+
+run-e2e-tests:
+	@gotestsum --junitfile junit-e2e-test.xml -- -tags=e2e ./...
+
+add-test-dependencies:
+	@helm repo add metrics-server "https://kubernetes-sigs.github.io/metrics-server/"
+	@helm repo add istio "https://istio-release.storage.googleapis.com/charts"
+	@helm repo update
 
 # Default target
 .DEFAULT_GOAL := help 

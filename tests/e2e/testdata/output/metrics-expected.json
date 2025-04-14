@@ -1,0 +1,53 @@
+{
+  "name": "kind-e2e-metrics-test-cluster",
+  "namespaces": {
+    "default": {
+      "is_istio_injected": false,
+      "pods": 0,
+      "resources": {
+        "regular": {
+          "containers": 0,
+          "request": {
+            "cpu": 0,
+            "memory_gb": 0
+          },
+          "actual": {}
+        }
+      }
+    },
+    "istio-injected-namespace-1": {
+      "is_istio_injected": true,
+      "pods": 1,
+      "resources": {
+        "regular": {
+          "containers": 1,
+          "request": {
+            "cpu": 0.1,
+            "memory_gb": 0.09765625
+          },
+          "actual": {}
+        },
+        "istio": {
+          "containers": 1,
+          "request": {
+            "cpu": 0.1,
+            "memory_gb": 0.125
+          },
+          "actual": {}
+        }
+      }
+    }
+  },
+  "nodes": {
+    "e2e-metrics-test-cluster-control-plane": {
+      "instance_type": "unknown",
+      "region": "unknown",
+      "zone": "unknown",
+      "resources": {
+        "capacity": {},
+        "actual": {}
+      }
+    }
+  },
+  "has_metrics": true
+} 

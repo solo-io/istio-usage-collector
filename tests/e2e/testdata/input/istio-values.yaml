@@ -1,0 +1,27 @@
+global:
+  proxy:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+# Settings specific to the istiod deployment
+pilot:
+  autoscaleEnabled: false
+  k8s:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2048Mi
+
+gateways:
+  istio-ingressgateway:
+    enabled: false
+  istio-egressgateway:
+    enabled: false
+
+# Use default revision
+revision: ""

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/solo-io/istio-usage-collector/internal/logging"
-	"github.com/solo-io/istio-usage-collector/internal/models"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
+	"github.com/solo-io/istio-usage-collector/pkg/models"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -158,7 +158,7 @@ func loadExistingData(fileName string) (*models.ClusterInfo, error) {
 }
 
 // processNodes processes all nodes in the cluster
-func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, clusterInfo *models.ClusterInfo, cfg *utils.Config, hasMetrics bool) error {
+func processNodes(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, clusterInfo *models.ClusterInfo, cfg *utils.Config, hasMetrics bool) error {
 	logging.Debug("Processing nodes for cluster %s", cfg.KubeContext)
 
 	// Check if the context is cancelled
@@ -289,7 +289,7 @@ func processNodes(ctx context.Context, clientset *kubernetes.Clientset, metricsC
 }
 
 // processNamespaces processes all namespaces in the cluster in parallel
-func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, clusterInfo *models.ClusterInfo, cfg *utils.Config, hasMetrics bool) error {
+func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, clusterInfo *models.ClusterInfo, cfg *utils.Config, hasMetrics bool) error {
 	// Add context checking for cancellation
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -411,7 +411,7 @@ func processNamespaces(ctx context.Context, clientset *kubernetes.Clientset, met
 }
 
 // processNamespace processes an individual namespace
-func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metricsClient *metricsv.Clientset, namespace string, hasMetrics bool) (*models.NamespaceInfo, error) {
+func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool) (*models.NamespaceInfo, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -583,7 +583,7 @@ func processNamespace(ctx context.Context, clientset *kubernetes.Clientset, metr
 }
 
 // getMetricsWithRetries gets metrics for all pods in a namespace with retry logic
-func getMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clientset, namespace string) (*v1beta1.PodMetricsList, error) {
+func getMetricsWithRetries(ctx context.Context, metricsClient metricsv.Interface, namespace string) (*v1beta1.PodMetricsList, error) {
 	var result *v1beta1.PodMetricsList
 	var lastErr error
 
@@ -694,7 +694,7 @@ func saveClusterInfo(clusterInfo *models.ClusterInfo, outputFile string) error {
 }
 
 // processNode processes an individual node
-func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node corev1.Node, hasMetrics bool) (models.NodeInfo, error) {
+func processNode(ctx context.Context, metricsClient metricsv.Interface, node corev1.Node, hasMetrics bool) (models.NodeInfo, error) {
 	// Check if the context is cancelled
 	if ctx.Err() != nil {
 		return models.NodeInfo{}, ctx.Err()
@@ -747,7 +747,10 @@ func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node co
 		} else if nodeMetrics != nil {
 			cpuUsage := nodeMetrics.Usage.Cpu().AsApproximateFloat64()
 			memoryUsage := float64(nodeMetrics.Usage.Memory().Value()) / (1024 * 1024 * 1024)
-			nodeInfo.SetActualNodeResources(cpuUsage, memoryUsage)
+			nodeInfo.Resources.Actual = &models.NodeResourceSpec{
+				CPU:      cpuUsage,
+				MemoryGB: memoryUsage,
+			}
 		}
 	}
 
@@ -755,7 +758,7 @@ func processNode(ctx context.Context, metricsClient *metricsv.Clientset, node co
 }
 
 // getNodeMetricsWithRetries gets metrics for a node with retry logic
-func getNodeMetricsWithRetries(ctx context.Context, metricsClient *metricsv.Clientset, nodeName string) (*v1beta1.NodeMetrics, error) {
+func getNodeMetricsWithRetries(ctx context.Context, metricsClient metricsv.Interface, nodeName string) (*v1beta1.NodeMetrics, error) {
 	var result *v1beta1.NodeMetrics
 	var lastErr error
 

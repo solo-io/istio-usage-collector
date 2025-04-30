@@ -1,2 +1,2 @@
 enhancement:
-- Check for pod-level istio injection
+- Use Istio's MutatingAdmissionWebhooks to check for (automatic) istio injection instead of manual label checks. This is to simulate Istio's `istioctl x check-inject` command.

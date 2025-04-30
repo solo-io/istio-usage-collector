@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+
 	"github.com/solo-io/istio-usage-collector/internal/logging"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
 	"github.com/solo-io/istio-usage-collector/pkg/models"
@@ -329,6 +331,12 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 	concurrentLimit := runtime.NumCPU() * 4
 	semaphore := make(chan struct{}, concurrentLimit)
 
+	// TODO: Get global istio injection policy for namespaces
+	webhooks, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logging.Warn("Failed to list mutating webhook configurations: %v", err)
+	}
+
 	logging.Debug("Processing namespaces with up to %d concurrent requests", concurrentLimit)
 	for _, ns := range namespaces.Items {
 		// Check parent context for cancellation before spawning more goroutines
@@ -367,7 +375,7 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 				return
 			}
 
-			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics)
+			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics, webhooks)
 
 			if progress != nil {
 				progress.Increment()
@@ -411,37 +419,22 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 }
 
 // processNamespace processes an individual namespace
-// TODO: We currently don't check for the global istio injection policy to fall back to if no labels are set (.sidecarInjectorWebhook.enableNamespacesByDefault=true).
-// - NOTE: there is an _experimental_ istioctl feature (istioctl x check-inject) which could be utilized here instead of manually checking labels, but (1) it's experimental and (2) its output isn't easily parseable.
 // TODO: We currently don't check for Sidecar CRs -- https://istio.io/latest/docs/reference/config/networking/sidecar/
-func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool) (*models.NamespaceInfo, error) {
+func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool, webhooks *admissionregistrationv1.MutatingWebhookConfigurationList) (*models.NamespaceInfo, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
+	webhooksList := make([]admissionregistrationv1.MutatingWebhookConfiguration, 0)
+	if webhooks != nil {
+		webhooksList = webhooks.Items
+	}
+	istioWebhooks := utils.FilterIstioWebhooks(webhooksList)
 
 	// Check if namespace has Istio injection
 	ns, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get namespace details: %w", err)
-	}
-
-	// istio injection on a namespace-level is based on the namespace labels (istio-injection or istio.io/rev)
-	// if istio-injection is explicitly disabled, we should return false for the namespace-level istio injection status
-	var isNamespaceIstioInjected *bool
-	if value, ok := ns.Labels["istio-injection"]; ok {
-		if value == "enabled" {
-			isNamespaceIstioInjected = &[]bool{true}[0]
-		} else if value == "disabled" {
-			isNamespaceIstioInjected = &[]bool{false}[0]
-		}
-	} else if _, ok := ns.Labels["istio.io/rev"]; ok {
-		isNamespaceIstioInjected = &[]bool{true}[0]
-	}
-
-	if isNamespaceIstioInjected != nil && *isNamespaceIstioInjected {
-		logging.Debug("Namespace %s has Istio injection enabled", namespace)
-	} else {
-		logging.Debug("Namespace %s has no Istio injection", namespace)
 	}
 
 	// Get pods in the namespace
@@ -487,32 +480,20 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 	istioCpuActual := 0.0
 	istioMemActual := 0.0
 
-	// use this to determine if the namespace has any pods with istio injection enabled
-	doesNamespaceHaveIstioInjectedPods := false
+	// Whether the namespace has at least one pod with istio injection
+	isIstioInjected := false
 
 	// Process all pods
 	for _, pod := range pods.Items {
 		// Check if istio injection is enabled on the pod-level
-		var isPodIstioInjected *bool
+		isPodIstioInjected := utils.CheckInject(istioWebhooks, pod.Labels, ns.Labels)
 
-		if value, ok := pod.Labels["sidecar.istio.io/inject"]; ok {
-			if value == "true" {
-				isPodIstioInjected = &[]bool{true}[0]
-			} else if value == "false" {
-				isPodIstioInjected = &[]bool{false}[0]
-			}
-		} else if _, ok := pod.Labels["istio.io/rev"]; ok {
-			isPodIstioInjected = &[]bool{true}[0]
-		}
-
-		// use this to toggle the overall namespace-level istio injection status
-		if isPodIstioInjected != nil && *isPodIstioInjected {
-			doesNamespaceHaveIstioInjectedPods = true
-		}
+		// if the namespace has istio injection enabled, or if the pod has istio injection enabled, we should count it as istio injected
+		isIstioInjected = isIstioInjected || isPodIstioInjected
 
 		// Check each container
 		for _, container := range pod.Spec.Containers {
-			// TODO/Q: Should we count it as an istio proxy if the pod (or namespace) has istio injection enabled? Or solely based on the istio-proxy container name, as we do now?
+			// TODO: What is the way to handle this?
 			isIstioProxy := container.Name == "istio-proxy"
 
 			// Count container types
@@ -570,22 +551,10 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		}
 	}
 
-	// TODO: this should be replaced with the global istio injection policy for namespaces
-	fallbackIstioInjectionEnabled := false
-	isIstioExplicitlyDisabled := isNamespaceIstioInjected != nil && !*isNamespaceIstioInjected
-	// if the label for namesoace injection was not set, we should use the fallback istio injection policy for namespaces
-	if isNamespaceIstioInjected == nil {
-		isNamespaceIstioInjected = &fallbackIstioInjectionEnabled
-	}
-
-	// Determine if the namespace has istio injection (whether on the namespace-level [utilizing the fallback policy] or within any of its pods)
-	isIstioInjected := !isIstioExplicitlyDisabled && (*isNamespaceIstioInjected || doesNamespaceHaveIstioInjectedPods)
-
 	// Create namespace info (before appending actual resource usage and istio resources)
 	nsInfo := &models.NamespaceInfo{
 		Pods: len(pods.Items),
 		// the namespace had istio injected if it was either enabled on the namespace-level OR within any of its pods
-		// in the case of the namespace having istio injection explicitly disabled, regardless of whether any of its pods have istio injection enabled, we should return false because
 		IsIstioInjected: isIstioInjected,
 		Resources: models.ResourceInfo{
 			Regular: models.ContainerResources{

@@ -10,9 +10,11 @@ import (
 	"testing"
 
 	"github.com/solo-io/istio-usage-collector/pkg/models"
+	"sigs.k8s.io/yaml"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,6 +129,21 @@ func newNodeMetrics(name, cpuUsage, memUsage string) *v1beta1.NodeMetrics {
 func TestProcessNamespace(t *testing.T) {
 	ctx := context.Background()
 
+	// these are the default webhooks that are created through `istioctl install`, without any additional configuration
+	var istioRevisionTagDefaultWebhook admissionregistrationv1.MutatingWebhookConfiguration
+	data, err := os.ReadFile("../../tests/data/default-istio-revision-tag-mwh.yaml")
+	require.NoError(t, err)
+	err = yaml.Unmarshal(data, &istioRevisionTagDefaultWebhook)
+	require.NoError(t, err)
+
+	var istioSidecarInjectorWebhook admissionregistrationv1.MutatingWebhookConfiguration
+	data, err = os.ReadFile("../../tests/data/default-istio-sidecar-injector-mwh.yaml")
+	require.NoError(t, err)
+	err = yaml.Unmarshal(data, &istioSidecarInjectorWebhook)
+	require.NoError(t, err)
+
+	defaultMutatingWebhookList := admissionregistrationv1.MutatingWebhookConfigurationList{Items: []admissionregistrationv1.MutatingWebhookConfiguration{istioRevisionTagDefaultWebhook, istioSidecarInjectorWebhook}}
+
 	tests := []struct {
 		name           string
 		namespace      string
@@ -193,7 +210,8 @@ func TestProcessNamespace(t *testing.T) {
 			name:      "Namespace with istio rev label, pods, no metrics api",
 			namespace: "test-rev",
 			kubeObjects: []runtime.Object{
-				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-rev", Labels: map[string]string{"istio.io/rev": "1-18"}}},
+				// istio.io/rev is set to "default" so that it matches the automatic istio injection (defined in the default-istio-sidecar-injector-mwh.yaml)
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-rev", Labels: map[string]string{"istio.io/rev": "default"}}},
 				newPod("test-rev", "pod-rev", "node-b", "100m", "256Mi", true, "50m", "50Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{}, // No metrics objects available
@@ -253,10 +271,10 @@ func TestProcessNamespace(t *testing.T) {
 			hasMetricsAPI:  true,
 			expectedNsInfo: &models.NamespaceInfo{
 				Pods:            0,
-				IsIstioInjected: true,
+				IsIstioInjected: false, // this is false because no pods within the namespace have istio sidecar injected
 				Resources: models.ResourceInfo{
 					Regular: models.ContainerResources{Containers: 0, Request: models.Resources{CPU: 0, MemoryGB: 0}, Actual: &models.Resources{CPU: 0, MemoryGB: 0}},
-					Istio:   &models.ContainerResources{Containers: 0, Request: models.Resources{CPU: 0, MemoryGB: 0}, Actual: &models.Resources{CPU: 0, MemoryGB: 0}},
+					Istio:   nil,
 				},
 			},
 			expectError: false,
@@ -341,7 +359,7 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"istio.io/rev": "1-18"}),
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"istio.io/rev": "default"}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -408,7 +426,7 @@ func TestProcessNamespace(t *testing.T) {
 				return true, podMetricsList, nil
 			})
 
-			nsInfo, err := processNamespace(ctx, fakeClient, fakeMetricsClient, tt.namespace, tt.hasMetricsAPI)
+			nsInfo, err := processNamespace(ctx, fakeClient, fakeMetricsClient, tt.namespace, tt.hasMetricsAPI, &defaultMutatingWebhookList)
 
 			if tt.expectError {
 				assert.Error(t, err)

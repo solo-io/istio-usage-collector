@@ -37,7 +37,7 @@ jobs:
   e2e-tests:
     name: Run E2E Tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 10 # As of 04-11-2025, tests usually complete around 2 minute, so 10 minutes is a safe timeout.
+    timeout-minutes: 10 # As of 04-30-2025, tests usually complete in around 3 minutes, so 10 minutes is a safe timeout.
     steps:
       - uses: actions/checkout@v4
         with:

@@ -386,7 +386,8 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"sidecar.istio.io/inject": "true"}),
+				// while the pod has istio injection enabled, the namespace has istio injection disabled, so the istio-proxy container will not be injected
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{"sidecar.istio.io/inject": "true"}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -397,6 +398,30 @@ func TestProcessNamespace(t *testing.T) {
 					Regular: models.ContainerResources{
 						Containers: 1,
 						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},
+						Actual:     nil,
+					},
+					Istio: nil,
+				},
+			},
+			expectError: false,
+		},
+		{
+			// in this test we have a pod with an 'istio-proxy' container within it. because the namespace has istio injection disabled, the 'istio-proxy' container is treated as a regular container
+			name:      "Namespace with istio injection disabled label, one pod, unrelated 'istio-proxy' container, no metrics",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
+			},
+			metricsObjects: []runtime.Object{},
+			hasMetricsAPI:  false,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: false,
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 2, // the pod has 2 'regular' containers, the app and the istio-proxy
+						Request:    models.Resources{CPU: 0.3, MemoryGB: (256.0 + 128.0) / 1024.0},
 						Actual:     nil,
 					},
 					Istio: nil,
@@ -471,6 +496,8 @@ func TestProcessNamespace(t *testing.T) {
 		})
 	}
 }
+
+// TODO(infocus7): Create tests like above, but where the MWH had the setup where a user enabled namespace injection by default
 
 func TestProcessNode(t *testing.T) {
 	ctx := context.Background()

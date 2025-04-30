@@ -493,8 +493,8 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 
 		// Check each container
 		for _, container := range pod.Spec.Containers {
-			// TODO: What is the way to handle this?
-			isIstioProxy := container.Name == "istio-proxy"
+			// we only count istio-proxy container as an istio sidecar if the pod has istio injection enabled
+			isIstioProxy := container.Name == "istio-proxy" && isPodIstioInjected
 
 			// Count container types
 			if isIstioProxy {

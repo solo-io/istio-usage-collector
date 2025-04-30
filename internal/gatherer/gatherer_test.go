@@ -24,11 +24,12 @@ import (
 )
 
 // Helper function to create a simple pod
-func newPod(namespace, name, nodeName string, cpuRequest, memRequest string, hasIstioProxy bool, istioProxyCpu, istioProxyMem string) *corev1.Pod {
+func newPod(namespace, name, nodeName string, cpuRequest, memRequest string, hasIstioProxy bool, istioProxyCpu, istioProxyMem string, labels map[string]string) *corev1.Pod {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
 			NodeName: nodeName,
@@ -162,8 +163,8 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "enabled"}}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi"),
-				newPod("test-istio", "pod-2", "node-a", "100m", "64Mi", true, "100m", "128Mi"),
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
+				newPod("test-istio", "pod-2", "node-a", "100m", "64Mi", true, "100m", "128Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{
 				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
@@ -193,7 +194,7 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-rev",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-rev", Labels: map[string]string{"istio.io/rev": "1-18"}}},
-				newPod("test-rev", "pod-rev", "node-b", "100m", "256Mi", true, "50m", "50Mi"),
+				newPod("test-rev", "pod-rev", "node-b", "100m", "256Mi", true, "50m", "50Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{}, // No metrics objects available
 			hasMetricsAPI:  false,
@@ -260,7 +261,131 @@ func TestProcessNamespace(t *testing.T) {
 			},
 			expectError: false,
 		},
-		// TODO: Add more tests:  error listing pods, error getting metrics -- verifying that fails with metrics client still allows for gathering of regular resources, context cancelled
+		{
+			name:      "Namespace without istio injection label, pods without istio injection, metrics enabled",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
+			},
+			metricsObjects: []runtime.Object{
+				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
+			},
+			hasMetricsAPI: true,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: false,
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 1,                                                      // pod-1 app
+						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},   // 200m, 256Mi
+						Actual:     &models.Resources{CPU: 0.15, MemoryGB: 180.0 / 1024.0}, // 150m, 180Mi
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:      "Namespace with istio injection disabled, pods without istio injection, metrics enabled",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
+			},
+			metricsObjects: []runtime.Object{
+				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", false, "", ""),
+			},
+			hasMetricsAPI: true,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: false,
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 1,                                                      // pod-1 app
+						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},   // 200m, 256Mi
+						Actual:     &models.Resources{CPU: 0.15, MemoryGB: 180.0 / 1024.0}, // 150m, 180Mi
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:      "Namespace without istio injection label, pod with istio injection enabled (sidecar.istio.io/inject=true), no metrics",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"sidecar.istio.io/inject": "true"}),
+			},
+			metricsObjects: []runtime.Object{},
+			hasMetricsAPI:  false,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: true, // should be true because while the namespace does not have istio injection enabled, a pod within the namespace has istio injection enabled
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 1,
+						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},
+						Actual:     nil,
+					},
+					Istio: &models.ContainerResources{
+						Containers: 1,
+						Request:    models.Resources{CPU: 0.1, MemoryGB: 128.0 / 1024.0},
+						Actual:     nil,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:      "Namespace without istio injection label, pod with istio rev label, no metrics",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"istio.io/rev": "1-18"}),
+			},
+			metricsObjects: []runtime.Object{},
+			hasMetricsAPI:  false,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: true, // should be true because while the namespace does not have istio injection enabled, a pod within the namespace has istio injection enabled
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 1,
+						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},
+						Actual:     nil,
+					},
+					Istio: &models.ContainerResources{
+						Containers: 1,
+						Request:    models.Resources{CPU: 0.1, MemoryGB: 128.0 / 1024.0},
+						Actual:     nil,
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:      "Namespace with istio injection disabled label, pod with istio injection enabled (sidecar.istio.io/inject=true), no metrics",
+			namespace: "test-istio",
+			kubeObjects: []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
+				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"sidecar.istio.io/inject": "true"}),
+			},
+			metricsObjects: []runtime.Object{},
+			hasMetricsAPI:  false,
+			expectedNsInfo: &models.NamespaceInfo{
+				Pods:            1,
+				IsIstioInjected: false, // should be false because the namespace has istio injection explicitly disabled
+				Resources: models.ResourceInfo{
+					Regular: models.ContainerResources{
+						Containers: 1,
+						Request:    models.Resources{CPU: 0.2, MemoryGB: 256.0 / 1024.0},
+						Actual:     nil,
+					},
+					Istio: nil,
+				},
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -722,7 +847,3 @@ func TestGetClusterName(t *testing.T) {
 		})
 	}
 }
-
-// TODO: Add TestSaveClusterInfo?
-// TODO: Add tests for processNamespaces and processNodes (higher level functions) using fake clients and checking concurrency/error handling/continue logic.
-//   currently we're testing the lower level functions directly (single namespace, single node).

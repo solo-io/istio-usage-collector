@@ -494,7 +494,12 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		// Check each container
 		for _, container := range pod.Spec.Containers {
 			// we only count istio-proxy container as an istio sidecar if the pod has istio injection enabled
-			isIstioProxy := container.Name == "istio-proxy" && isPodIstioInjected
+			isIstioProxyContainer := container.Name == "istio-proxy"
+			isIstioProxy := isIstioProxyContainer && isPodIstioInjected
+			if isIstioProxyContainer && !isPodIstioInjected {
+				// add a debug log if the pod has an istio-proxy container but istio injection is disabled, meaning we won't treat it as an istio sidecar
+				logging.Debug("%s.%s does not have istio injection enabled, treating its 'istio-proxy' container as a regular container", namespace, pod.Name)
+			}
 
 			// Count container types
 			if isIstioProxy {

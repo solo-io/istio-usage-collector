@@ -1,4 +1,4 @@
-////go:build performance
+//go:build performance
 
 package gatherer
 

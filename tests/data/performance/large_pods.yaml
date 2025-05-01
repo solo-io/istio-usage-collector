@@ -1,14 +1,14 @@
 namespaces:
-  # sets up 500 namespaces with 1500 pods each, in the perf-node-<number> node, where istio injection is defined on the namespace
+  # sets up 250 namespaces with 1000 pods each, in the perf-node-<number> node, where istio injection is defined on the namespace
   - namePrefix: perf-test-ns-
-    count: 500
+    count: 250
     labels:
       env: performance
     isIstioInjected: true
     hasMetrics: true
     podConfig:
       namePrefix: app-pod-
-      count: 1500
+      count: 1000
       nodeNamePrefix: perf-node-
       labels:
         app: myapp
@@ -23,9 +23,9 @@ namespaces:
         cpuActual: "25m"
         memActual: "75Mi"
   
-  # sets up 500 namespaces with 1000 pods each, in the perf-node-2-<number> node, where istio injection is defined on the namespace
+  # sets up 250 namespaces with 1000 pods each, in the perf-node-2-<number> node, where istio injection is defined on the namespace
   - namePrefix: perf-test-ns-2-
-    count: 500
+    count: 250
     labels:
       env: performance
     isIstioInjected: true
@@ -47,16 +47,16 @@ namespaces:
         cpuActual: "25m"
         memActual: "75Mi"
 
-  # sets up 500 namespaces with 1500 pods each, in the perf-node-<number> node, where istio injection is defined on the pod
+  # sets up 250 namespaces with 1000 pods each, in the perf-node-<number> node, where istio injection is defined on the pod
   - namePrefix: perf-test-ns-3-
-    count: 500
+    count: 250
     labels:
       env: performance
     isIstioInjected: false
     hasMetrics: true
     podConfig:
       namePrefix: app-pod-injected-
-      count: 1500
+      count: 1000
       nodeNamePrefix: perf-node-
       labels:
         app: myapp
@@ -72,7 +72,7 @@ namespaces:
         cpuActual: "25m"
         memActual: "75Mi"
   
-  # sets up 250 namespaces with 1500 pods each, in the perf-node-<number> node, where istio injection is not defined
+  # sets up 250 namespaces with 1000 pods each, in the perf-node-<number> node, where istio injection is not defined
   - namePrefix: no-istio-ns-
     count: 250
     labels:
@@ -81,7 +81,7 @@ namespaces:
     hasMetrics: false
     podConfig:
       namePrefix: simple-pod-
-      count: 1500
+      count: 1000
       nodeNamePrefix: perf-node-
       labels:
         app: simpleapp
@@ -89,7 +89,7 @@ namespaces:
         cpuRequest: "50m"
         memRequest: "64Mi"
 
-  # sets up 250 namespaces with 1500 pods each, in the perf-node-2-<number> node, where istio injection is not defined
+  # sets up 250 namespaces with 1000 pods each, in the perf-node-2-<number> node, where istio injection is not defined
   - namePrefix: no-istio-ns-2-
     count: 250
     labels:
@@ -98,7 +98,7 @@ namespaces:
     hasMetrics: false
     podConfig:
       namePrefix: simple-pod-2-
-      count: 1500
+      count: 1000
       nodeNamePrefix: perf-node-2-
       labels:
         app: simpleapp
@@ -106,7 +106,7 @@ namespaces:
         cpuRequest: "50m"
         memRequest: "64Mi"
 
-  # sets up 500 namespaces with 1500 pods each, in the perf-node-3-<number> node, where istio injection is defined on the pod, but is explicitly disabled in the namespace
+  # sets up 500 namespaces with 1000 pods each, in the perf-node-3-<number> node, where istio injection is defined on the pod, but is explicitly disabled in the namespace
   - namePrefix: perf-test-ns-disabled-
     count: 500
     labels:
@@ -116,7 +116,7 @@ namespaces:
     hasMetrics: true
     podConfig:
       namePrefix: app-pod-disabled-
-      count: 500
+      count: 1000
       nodeNamePrefix: perf-node-3-
       labels:
         app: myapp

@@ -24,12 +24,9 @@ import (
 	metricsfake "k8s.io/metrics/pkg/client/clientset/versioned/fake"
 )
 
-// --- Structs for Declarative Test Configuration ---
-
 // PerformanceTestConfig defines the overall structure for the performance test YAML config.
 type PerformanceTestConfig struct {
 	Namespaces []NamespaceConfig `yaml:"namespaces"`
-	// Add Node configuration later if needed
 }
 
 // NamespaceConfig defines the configuration for a single namespace in the test.
@@ -62,10 +59,6 @@ type ContainerConfig struct {
 	CPUActual  string `yaml:"cpuActual"`  // e.g., "50m" - Only used if NamespaceConfig.HasMetrics is true
 	MemActual  string `yaml:"memActual"`  // e.g., "64Mi" - Only used if NamespaceConfig.HasMetrics is true
 }
-
-// --- End Structs ---
-
-// --- Helper Functions for Declarative Test Setup ---
 
 // loadPerformanceTestConfig loads the test configuration from the specified YAML file.
 func loadPerformanceTestConfig(filePath string) (*PerformanceTestConfig, error) {
@@ -223,8 +216,6 @@ func generateMockResources(config *PerformanceTestConfig) ([]runtime.Object, []r
 	return kubeObjects, metricsObjects, nil
 }
 
-// --- End Helper Functions ---
-
 // Helper function to create a simple pod
 func newPod(namespace, name, nodeName string, cpuRequest, memRequest string, hasIstioProxy bool, istioProxyCpu, istioProxyMem string, labels map[string]string) *corev1.Pod {
 	pod := &corev1.Pod{
@@ -298,12 +289,21 @@ func newPodMetrics(namespace, name string, cpuUsage, memUsage string, hasIstioPr
 }
 
 func BenchmarkProcessNamespaces(b *testing.B) {
-	configPath := "../../tests/data/gatherer_namespace_performance_test_config.yaml"
+	configPath := "../../tests/data/performance/large_namespaces.yaml"
 	config, err := loadPerformanceTestConfig(configPath)
 	if err != nil {
 		b.Fatalf("Failed to load performance test config: %v", err)
 	}
 
+	// Calculate totals for logging
+	totalNamespaces := 0
+	totalPods := 0
+	for _, nsConfig := range config.Namespaces {
+		totalNamespaces += nsConfig.Count
+		totalPods += nsConfig.Count * nsConfig.PodConfig.Count
+	}
+
+	b.Logf("Processing %d namespaces with %d pods each\n", len(config.Namespaces), config.Namespaces[0].PodConfig.Count)
 	kubeObjects, metricsObjects, err := generateMockResources(config)
 	if err != nil {
 		b.Fatalf("Failed to generate mock resources: %v", err)
@@ -311,8 +311,10 @@ func BenchmarkProcessNamespaces(b *testing.B) {
 	b.Logf("Generated %d kube objects and %d metrics objects\n", len(kubeObjects), len(metricsObjects))
 
 	// Prepare fake clients
+	b.Logf("Creating fake clients")
 	fakeClient := fake.NewSimpleClientset(kubeObjects...)
 	fakeMetricsClient := metricsfake.NewSimpleClientset(metricsObjects...)
+	b.Logf("Fake clients created")
 
 	// Set up metrics client reactors (handle potential nil metrics list for specific namespaces)
 	fakeMetricsClient.PrependReactor("list", "pods", func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -373,15 +375,6 @@ func BenchmarkProcessNamespaces(b *testing.B) {
 
 	b.StopTimer() // Stop timing explicitly (though ResetTimer implicitly does this at start)
 
-	// Calculate totals for logging
-	totalNamespaces := 0
-	totalPods := 0
-	for _, nsConfig := range config.Namespaces {
-		totalNamespaces += nsConfig.Count
-		totalPods += nsConfig.Count * nsConfig.PodConfig.Count
-	}
 	b.ReportMetric(float64(len(clusterInfo.Namespaces)), "namespaces_processed")
 	b.ReportMetric(float64(totalPods), "pods_processed")
 }
-
-// --- End Benchmark Function ---

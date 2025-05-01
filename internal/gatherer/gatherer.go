@@ -199,7 +199,12 @@ func processNodes(ctx context.Context, clientset kubernetes.Interface, metricsCl
 	errorCh := make(chan error, totalNodes)
 
 	// Use a semaphore to control concurrency
-	concurrentLimit := runtime.NumCPU() * 2
+	var concurrentLimit int
+	if cfg.MaxProcessors > 0 {
+		concurrentLimit = cfg.MaxProcessors
+	} else {
+		concurrentLimit = runtime.NumCPU() * 2
+	}
 	semaphore := make(chan struct{}, concurrentLimit)
 
 	logging.Debug("Processing nodes with up to %d concurrent requests", concurrentLimit)
@@ -328,16 +333,30 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 	errorCh := make(chan error, totalNamespaces)
 
 	// Use a semaphore to control concurrency based on system resources
-	concurrentLimit := runtime.NumCPU() * 4
+	var concurrentLimit int
+	if cfg.MaxProcessors > 0 {
+		concurrentLimit = cfg.MaxProcessors
+	} else {
+		concurrentLimit = runtime.NumCPU() * 4
+	}
 	semaphore := make(chan struct{}, concurrentLimit)
 
-	// TODO: Get global istio injection policy for namespaces
+	logging.Debug("Processing namespaces with up to %d concurrent requests", concurrentLimit)
+
+	// Get all mutating webhook configurations - istio uses mwhs to define its automatic sidecar injection policy
 	webhooks, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		logging.Warn("Failed to list mutating webhook configurations: %v", err)
 	}
+	if webhooks == nil || len(webhooks.Items) == 0 {
+		logging.Warn("No mutating webhook configurations found in cluster %s", cfg.KubeContext)
+	}
+	// filter out non-istio webhooks
+	istioWebhooks := utils.FilterIstioWebhooks(webhooks.Items)
+	if len(istioWebhooks) == 0 {
+		logging.Warn("No Istio-related mutating webhook configurations found in cluster %s", cfg.KubeContext)
+	}
 
-	logging.Debug("Processing namespaces with up to %d concurrent requests", concurrentLimit)
 	for _, ns := range namespaces.Items {
 		// Check parent context for cancellation before spawning more goroutines
 		if ctx.Err() != nil {
@@ -375,8 +394,7 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 				return
 			}
 
-			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics, webhooks)
-
+			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics, istioWebhooks)
 			if progress != nil {
 				progress.Increment()
 			}
@@ -418,18 +436,12 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 	return nil
 }
 
-// processNamespace processes an individual namespace
+// processNamespace processes an individual namespace and its pods
 // TODO: We currently don't check for Sidecar CRs -- https://istio.io/latest/docs/reference/config/networking/sidecar/
-func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool, webhooks *admissionregistrationv1.MutatingWebhookConfigurationList) (*models.NamespaceInfo, error) {
+func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool, istioWebhooks []admissionregistrationv1.MutatingWebhookConfiguration) (*models.NamespaceInfo, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-
-	webhooksList := make([]admissionregistrationv1.MutatingWebhookConfiguration, 0)
-	if webhooks != nil {
-		webhooksList = webhooks.Items
-	}
-	istioWebhooks := utils.FilterIstioWebhooks(webhooksList)
 
 	// Check if namespace has Istio injection
 	ns, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
@@ -596,7 +608,6 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 			}
 		}
 	}
-
 	return nsInfo, nil
 }
 

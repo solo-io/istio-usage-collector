@@ -22,4 +22,8 @@ type Config struct {
 
 	// NoProgress indicates whether to disable the progress bar
 	NoProgress bool
+
+	// MaxProcessors is the maximum number of processors to use.
+	// By default, all available processors will be used.
+	MaxProcessors int
 }

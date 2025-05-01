@@ -1,3 +1,6 @@
+new-feature:
+- Add a `max-processors` flag to the command to limit the number of processors used.
+
 enhancement:
 - Use Istio's MutatingAdmissionWebhooks to check for automatic istio injection instead of manual label checks. This is to simulate Istio's `istioctl x check-inject` command.
 

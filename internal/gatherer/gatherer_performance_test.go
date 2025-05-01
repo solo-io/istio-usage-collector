@@ -1,4 +1,4 @@
-//go:build performance
+////go:build performance
 
 package gatherer
 
@@ -221,6 +221,7 @@ type benchmarkCase struct {
 	configPath          string
 	revisionWebhookPath string
 	sidecarWebhookPath  string
+	maxProcessors       int
 }
 
 type benchmarkResult struct {
@@ -235,16 +236,32 @@ func BenchmarkProcessNamespaces(b *testing.B) {
 	// Define benchmark cases
 	cases := []benchmarkCase{
 		{
-			name:                "Large Namespaces",
+			name:                "LargeNamespaces_MultiProcessor",
 			configPath:          "../../tests/data/performance/large_namespaces.yaml",
 			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
 			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+			maxProcessors:       0,
 		},
 		{
-			name:                "Large Pods",
+			name:                "LargeNamespaces_SingleProcessor",
+			configPath:          "../../tests/data/performance/large_namespaces.yaml",
+			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
+			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+			maxProcessors:       1,
+		},
+		{
+			name:                "LargePods_MultiProcessor",
 			configPath:          "../../tests/data/performance/large_pods.yaml",
 			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
 			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+			maxProcessors:       0,
+		},
+		{
+			name:                "LargePods_SingleProcessor",
+			configPath:          "../../tests/data/performance/large_pods.yaml",
+			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
+			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+			maxProcessors:       1,
 		},
 	}
 
@@ -303,6 +320,7 @@ func BenchmarkProcessNamespaces(b *testing.B) {
 				KubeContext:    fmt.Sprintf("benchmark-context-%s", bc.name),
 				ObfuscateNames: false,
 				NoProgress:     true, // Disable progress bar during benchmark for cleaner console output
+				MaxProcessors:  bc.maxProcessors,
 			}
 
 			// Check if any namespace config requires metrics

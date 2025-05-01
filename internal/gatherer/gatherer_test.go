@@ -41,7 +41,7 @@ func TestProcessNamespace(t *testing.T) {
 	err = yaml.Unmarshal(data, &istioSidecarInjectorWebhook)
 	require.NoError(t, err)
 
-	defaultMutatingWebhookList := admissionregistrationv1.MutatingWebhookConfigurationList{Items: []admissionregistrationv1.MutatingWebhookConfiguration{istioRevisionTagDefaultWebhook, istioSidecarInjectorWebhook}}
+	defaultIstioMutatingWebhooks := []admissionregistrationv1.MutatingWebhookConfiguration{istioRevisionTagDefaultWebhook, istioSidecarInjectorWebhook}
 
 	tests := []struct {
 		name           string
@@ -350,7 +350,7 @@ func TestProcessNamespace(t *testing.T) {
 				return true, podMetricsList, nil
 			})
 
-			nsInfo, err := processNamespace(ctx, fakeClient, fakeMetricsClient, tt.namespace, tt.hasMetricsAPI, &defaultMutatingWebhookList)
+			nsInfo, err := processNamespace(ctx, fakeClient, fakeMetricsClient, tt.namespace, tt.hasMetricsAPI, defaultIstioMutatingWebhooks)
 
 			if tt.expectError {
 				assert.Error(t, err)

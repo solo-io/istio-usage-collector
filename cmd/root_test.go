@@ -19,6 +19,7 @@ func TestRootCommandFlags(t *testing.T) {
 	assert.NotNil(t, cmd.Flag("output-prefix"))
 	assert.NotNil(t, cmd.Flag("debug"))
 	assert.NotNil(t, cmd.Flag("no-progress"))
+	assert.NotNil(t, cmd.Flag("max-processors"))
 
 	assert.Nil(t, cmd.Flag("version")) // This is only set for builds in standalone mode, not part of the command in general
 }
@@ -45,6 +46,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				OutputFilePrefix:   "", // Default is empty string, where during execution, the context name is used
 				EnableDebug:        false,
 				NoProgress:         false,
+				MaxProcessors:      0,
 			},
 		},
 		{
@@ -58,6 +60,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				"--output-prefix", "my-prefix",
 				"--debug",
 				"--no-progress",
+				"--max-processors", "1",
 			},
 			expectedFlags: CommandFlags{
 				HideNames:          true,
@@ -68,6 +71,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				OutputFilePrefix:   "my-prefix",
 				EnableDebug:        true,
 				NoProgress:         true,
+				MaxProcessors:      1,
 			},
 		},
 		{
@@ -89,6 +93,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				OutputFilePrefix:   "short-p",
 				EnableDebug:        false, // default
 				NoProgress:         false, // default
+				MaxProcessors:      0,     // default
 			},
 		},
 	}
@@ -134,6 +139,10 @@ func TestRootCommandFlagParsing(t *testing.T) {
 			noProgress, err := cmdFlags.GetBool("no-progress")
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedFlags.NoProgress, noProgress, "Flag NoProgress mismatch")
+
+			maxProcessors, err := cmdFlags.GetInt("max-processors")
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedFlags.MaxProcessors, maxProcessors, "Flag MaxProcessors mismatch")
 		})
 	}
 }

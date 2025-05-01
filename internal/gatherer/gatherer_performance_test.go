@@ -1,4 +1,4 @@
-////go:build test || performance
+////go:build performance
 
 package gatherer
 
@@ -77,29 +77,29 @@ func loadPerformanceTestConfig(filePath string) (*PerformanceTestConfig, error) 
 }
 
 // generateMockResources creates fake Kubernetes and metrics objects based on the config.
-func generateMockResources(config *PerformanceTestConfig) ([]runtime.Object, []runtime.Object, error) {
+func generateMockResources(config *PerformanceTestConfig, revisionWebhookPath, sidecarWebhookPath string) ([]runtime.Object, []runtime.Object, error) {
 	kubeObjects := []runtime.Object{}
 	metricsObjects := []runtime.Object{}
 
 	// load default webhooks for injection checks
 	var istioRevisionTagDefaultWebhook admissionregistrationv1.MutatingWebhookConfiguration
-	data, err := os.ReadFile("../../tests/data/default-istio-revision-tag-mwh.yaml")
+	data, err := os.ReadFile(revisionWebhookPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read default webhook file: %w", err)
+		return nil, nil, fmt.Errorf("failed to read revision webhook file %s: %w", revisionWebhookPath, err)
 	}
 	err = yaml.Unmarshal(data, &istioRevisionTagDefaultWebhook)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal default webhook: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal revision webhook: %w", err)
 	}
 
 	var istioSidecarInjectorWebhook admissionregistrationv1.MutatingWebhookConfiguration
-	data, err = os.ReadFile("../../tests/data/default-istio-sidecar-injector-mwh.yaml")
+	data, err = os.ReadFile(sidecarWebhookPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read default webhook file: %w", err)
+		return nil, nil, fmt.Errorf("failed to read sidecar injector webhook file %s: %w", sidecarWebhookPath, err)
 	}
 	err = yaml.Unmarshal(data, &istioSidecarInjectorWebhook)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal default webhook: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal sidecar injector webhook: %w", err)
 	}
 
 	// Add webhooks to kubeObjects so they can be retrieved by processNamespace
@@ -288,93 +288,138 @@ func newPodMetrics(namespace, name string, cpuUsage, memUsage string, hasIstioPr
 	return metrics
 }
 
+type benchmarkCase struct {
+	name                string
+	configPath          string
+	revisionWebhookPath string
+	sidecarWebhookPath  string
+}
+
+type benchmarkResult struct {
+	name                string
+	namespacesProcessed int
+	podsProcessed       int
+	duration            time.Duration
+}
+
 func BenchmarkProcessNamespaces(b *testing.B) {
-	configPath := "../../tests/data/performance/large_namespaces.yaml"
-	config, err := loadPerformanceTestConfig(configPath)
-	if err != nil {
-		b.Fatalf("Failed to load performance test config: %v", err)
+	results := make(map[string]benchmarkResult)
+	// Define benchmark cases
+	cases := []benchmarkCase{
+		{
+			name:                "Large Namespaces",
+			configPath:          "../../tests/data/performance/large_namespaces.yaml",
+			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
+			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+		},
+		{
+			name:                "Large Pods",
+			configPath:          "../../tests/data/performance/large_pods.yaml",
+			revisionWebhookPath: "../../tests/data/default-istio-revision-tag-mwh.yaml",
+			sidecarWebhookPath:  "../../tests/data/default-istio-sidecar-injector-mwh.yaml",
+		},
 	}
 
-	// Calculate totals for logging
-	totalNamespaces := 0
-	totalPods := 0
-	for _, nsConfig := range config.Namespaces {
-		totalNamespaces += nsConfig.Count
-		totalPods += nsConfig.Count * nsConfig.PodConfig.Count
-	}
+	for _, bc := range cases {
+		// Use b.Run to create a sub-benchmark for each case
+		b.Run(bc.name, func(b *testing.B) {
+			config, err := loadPerformanceTestConfig(bc.configPath)
+			if err != nil {
+				// Skip benchmark if config file doesn't exist, log instead of fatal
+				if os.IsNotExist(err) {
+					b.Skipf("Skipping benchmark %s: Config file not found: %s", bc.name, bc.configPath)
+				}
+				b.Fatalf("Failed to load performance test config %s: %v", bc.configPath, err)
+			}
 
-	b.Logf("Processing %d namespaces with %d pods each\n", len(config.Namespaces), config.Namespaces[0].PodConfig.Count)
-	kubeObjects, metricsObjects, err := generateMockResources(config)
-	if err != nil {
-		b.Fatalf("Failed to generate mock resources: %v", err)
-	}
-	b.Logf("Generated %d kube objects and %d metrics objects\n", len(kubeObjects), len(metricsObjects))
+			// Calculate totals for logging
+			totalNamespaces := 0
+			totalPods := 0
+			for _, nsConfig := range config.Namespaces {
+				totalNamespaces += nsConfig.Count
+				totalPods += nsConfig.Count * nsConfig.PodConfig.Count
+			}
 
-	// Prepare fake clients
-	b.Logf("Creating fake clients")
-	fakeClient := fake.NewSimpleClientset(kubeObjects...)
-	fakeMetricsClient := metricsfake.NewSimpleClientset(metricsObjects...)
-	b.Logf("Fake clients created")
+			kubeObjects, metricsObjects, err := generateMockResources(config, bc.revisionWebhookPath, bc.sidecarWebhookPath)
+			if err != nil {
+				b.Fatalf("[%s] Failed to generate mock resources: %v", bc.name, err)
+			}
 
-	// Set up metrics client reactors (handle potential nil metrics list for specific namespaces)
-	fakeMetricsClient.PrependReactor("list", "pods", func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
-		listAction := action.(clienttesting.ListAction)
-		ns := listAction.GetNamespace()
+			// Prepare fake clients
+			fakeClient := fake.NewSimpleClientset(kubeObjects...)
+			fakeMetricsClient := metricsfake.NewSimpleClientset(metricsObjects...)
 
-		// Filter metricsObjects for the requested namespace
-		nsMetrics := &v1beta1.PodMetricsList{Items: []v1beta1.PodMetrics{}}
-		for _, obj := range metricsObjects {
-			if podMetrics, ok := obj.(*v1beta1.PodMetrics); ok {
-				if podMetrics.Namespace == ns {
-					nsMetrics.Items = append(nsMetrics.Items, *podMetrics)
+			// Set up metrics client reactors (handle potential nil metrics list for specific namespaces)
+			fakeMetricsClient.PrependReactor("list", "pods", func(action clienttesting.Action) (handled bool, ret runtime.Object, err error) {
+				listAction := action.(clienttesting.ListAction)
+				ns := listAction.GetNamespace()
+
+				// Filter metricsObjects for the requested namespace
+				nsMetrics := &v1beta1.PodMetricsList{Items: []v1beta1.PodMetrics{}}
+				// Need to capture metricsObjects for this specific benchmark run
+				currentMetricsObjects := metricsObjects
+				for _, obj := range currentMetricsObjects {
+					if podMetrics, ok := obj.(*v1beta1.PodMetrics); ok {
+						if podMetrics.Namespace == ns {
+							nsMetrics.Items = append(nsMetrics.Items, *podMetrics)
+						}
+					}
+				}
+				return true, nsMetrics, nil
+			})
+
+			// Prepare ClusterInfo and Config for processNamespaces
+
+			// Basic config for the benchmark
+			processCfg := &utils.Config{
+				KubeContext:    fmt.Sprintf("benchmark-context-%s", bc.name),
+				ObfuscateNames: false,
+				NoProgress:     true, // Disable progress bar during benchmark for cleaner console output
+			}
+
+			// Check if any namespace config requires metrics
+			hasMetricsInConfig := false
+			for _, nsConfig := range config.Namespaces {
+				if nsConfig.HasMetrics {
+					hasMetricsInConfig = true
+					break
 				}
 			}
-		}
-		return true, nsMetrics, nil
-	})
 
-	// Prepare ClusterInfo and Config for processNamespaces
-	clusterInfo := models.NewClusterInfo() // Start with an empty ClusterInfo for each run
-	// Basic config for the benchmark
-	processCfg := &utils.Config{
-		KubeContext:    "benchmark-context",
-		ObfuscateNames: false,
-		NoProgress:     false, // TODO (maybe): Disable progress bar during benchmark
+			startTime := time.Now()
+			b.ResetTimer() // Start timing after setup for this specific case
+
+			for i := 0; i < b.N; i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+
+				clusterInfo := models.NewClusterInfo()
+
+				err := processNamespaces(ctx, fakeClient, fakeMetricsClient, clusterInfo, processCfg, hasMetricsInConfig)
+
+				cancel()
+
+				if err != nil {
+					// Stop the benchmark if an error occurs during processing
+					b.Fatalf("[%s] Benchmark iteration %d failed: %v", bc.name, i, err)
+				}
+			}
+
+			b.StopTimer() // Stop timing explicitly for this case
+			results[bc.name] = benchmarkResult{
+				name:                bc.name,
+				namespacesProcessed: totalNamespaces,
+				podsProcessed:       totalPods,
+				duration:            time.Since(startTime),
+			}
+		})
 	}
 
-	// Check if any namespace config requires metrics
-	hasMetricsInConfig := false
-	for _, nsConfig := range config.Namespaces {
-		if nsConfig.HasMetrics {
-			hasMetricsInConfig = true
-			break
-		}
+	// Print results
+	fmt.Println("Benchmark Results:")
+	for name, result := range results {
+		fmt.Printf("%s:\n", name)
+		fmt.Printf("  Namespaces Processed: %d\n", result.namespacesProcessed)
+		fmt.Printf("  Pods Processed: %d\n", result.podsProcessed)
+		fmt.Printf("  Duration: %s\n", result.duration)
 	}
-
-	b.ResetTimer() // Start timing after setup
-
-	for i := 0; i < b.N; i++ {
-		// It's important to create a new context for each iteration
-		// to avoid potential issues with context cancellation across iterations.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute) // Generous timeout for processing
-
-		// Reset clusterInfo partially if needed, or create anew if easier
-		// For this benchmark, let's process into the same map repeatedly.
-		// If state carryover is an issue, create a new clusterInfo inside the loop.
-		// clusterInfo := models.NewClusterInfo()
-
-		err := processNamespaces(ctx, fakeClient, fakeMetricsClient, clusterInfo, processCfg, hasMetricsInConfig)
-
-		cancel() // Cancel context at the end of each iteration
-
-		if err != nil {
-			// Stop the benchmark if an error occurs during processing
-			b.Fatalf("Benchmark iteration %d failed: %v", i, err)
-		}
-	}
-
-	b.StopTimer() // Stop timing explicitly (though ResetTimer implicitly does this at start)
-
-	b.ReportMetric(float64(len(clusterInfo.Namespaces)), "namespaces_processed")
-	b.ReportMetric(float64(totalPods), "pods_processed")
 }

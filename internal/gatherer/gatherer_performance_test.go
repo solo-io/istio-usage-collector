@@ -13,9 +13,9 @@ import (
 	"github.com/solo-io/istio-usage-collector/pkg/models"
 	"sigs.k8s.io/yaml"
 
+	testutils "github.com/solo-io/istio-usage-collector/tests"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -182,7 +182,7 @@ func generateMockResources(config *PerformanceTestConfig, revisionWebhookPath, s
 					istioMemReq = nsConfig.PodConfig.IstioProxy.MemRequest
 				}
 
-				pod := newPod(nsName, podName, nodeName,
+				pod := testutils.NewPod(nsName, podName, nodeName,
 					nsConfig.PodConfig.AppContainer.CPURequest,
 					nsConfig.PodConfig.AppContainer.MemRequest,
 					hasIstioSidecar, // Only add istio-proxy container if explicitly requested *and* injection is active
@@ -200,7 +200,7 @@ func generateMockResources(config *PerformanceTestConfig, revisionWebhookPath, s
 						istioCPUAct = nsConfig.PodConfig.IstioProxy.CPUActual
 						istioMemAct = nsConfig.PodConfig.IstioProxy.MemActual
 					}
-					podMetrics := newPodMetrics(nsName, podName,
+					podMetrics := testutils.NewPodMetrics(nsName, podName,
 						nsConfig.PodConfig.AppContainer.CPUActual,
 						nsConfig.PodConfig.AppContainer.MemActual,
 						hasIstioSidecar,
@@ -214,78 +214,6 @@ func generateMockResources(config *PerformanceTestConfig, revisionWebhookPath, s
 	}
 
 	return kubeObjects, metricsObjects, nil
-}
-
-// Helper function to create a simple pod
-func newPod(namespace, name, nodeName string, cpuRequest, memRequest string, hasIstioProxy bool, istioProxyCpu, istioProxyMem string, labels map[string]string) *corev1.Pod {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			NodeName: nodeName,
-			Containers: []corev1.Container{
-				{
-					Name: "app",
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{},
-					},
-				},
-			},
-		},
-	}
-	if cpuRequest != "" {
-		pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse(cpuRequest)
-	}
-	if memRequest != "" {
-		pod.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memRequest)
-	}
-
-	if hasIstioProxy {
-		istioContainer := corev1.Container{
-			Name: "istio-proxy",
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse(istioProxyCpu),
-					corev1.ResourceMemory: resource.MustParse(istioProxyMem),
-				},
-			},
-		}
-		pod.Spec.Containers = append(pod.Spec.Containers, istioContainer)
-	}
-	return pod
-}
-
-// Helper function to create pod metrics
-func newPodMetrics(namespace, name string, cpuUsage, memUsage string, hasIstioProxy bool, istioCpuUsage, istioMemUsage string) *v1beta1.PodMetrics {
-	metrics := &v1beta1.PodMetrics{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Containers: []v1beta1.ContainerMetrics{
-			{
-				Name: "app",
-				Usage: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse(cpuUsage),
-					corev1.ResourceMemory: resource.MustParse(memUsage),
-				},
-			},
-		},
-	}
-	if hasIstioProxy {
-		istioMetrics := v1beta1.ContainerMetrics{
-			Name: "istio-proxy",
-			Usage: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(istioCpuUsage),
-				corev1.ResourceMemory: resource.MustParse(istioMemUsage),
-			},
-		}
-		metrics.Containers = append(metrics.Containers, istioMetrics)
-	}
-	return metrics
 }
 
 type benchmarkCase struct {

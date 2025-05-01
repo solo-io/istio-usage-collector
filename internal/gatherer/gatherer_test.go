@@ -12,11 +12,11 @@ import (
 	"github.com/solo-io/istio-usage-collector/pkg/models"
 	"sigs.k8s.io/yaml"
 
+	testutils "github.com/solo-io/istio-usage-collector/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -24,107 +24,6 @@ import (
 	v1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsfake "k8s.io/metrics/pkg/client/clientset/versioned/fake"
 )
-
-// Helper function to create a simple pod
-func newPod(namespace, name, nodeName string, cpuRequest, memRequest string, hasIstioProxy bool, istioProxyCpu, istioProxyMem string, labels map[string]string) *corev1.Pod {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			NodeName: nodeName,
-			Containers: []corev1.Container{
-				{
-					Name: "app",
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{},
-					},
-				},
-			},
-		},
-	}
-	if cpuRequest != "" {
-		pod.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse(cpuRequest)
-	}
-	if memRequest != "" {
-		pod.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memRequest)
-	}
-
-	if hasIstioProxy {
-		istioContainer := corev1.Container{
-			Name: "istio-proxy",
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse(istioProxyCpu),
-					corev1.ResourceMemory: resource.MustParse(istioProxyMem),
-				},
-			},
-		}
-		pod.Spec.Containers = append(pod.Spec.Containers, istioContainer)
-	}
-	return pod
-}
-
-// Helper function to create pod metrics
-func newPodMetrics(namespace, name string, cpuUsage, memUsage string, hasIstioProxy bool, istioCpuUsage, istioMemUsage string) *v1beta1.PodMetrics {
-	metrics := &v1beta1.PodMetrics{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Containers: []v1beta1.ContainerMetrics{
-			{
-				Name: "app",
-				Usage: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse(cpuUsage),
-					corev1.ResourceMemory: resource.MustParse(memUsage),
-				},
-			},
-		},
-	}
-	if hasIstioProxy {
-		istioMetrics := v1beta1.ContainerMetrics{
-			Name: "istio-proxy",
-			Usage: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(istioCpuUsage),
-				corev1.ResourceMemory: resource.MustParse(istioMemUsage),
-			},
-		}
-		metrics.Containers = append(metrics.Containers, istioMetrics)
-	}
-	return metrics
-}
-
-// Helper function to create a simple node
-func newNode(name, cpuCapacity, memCapacity string, labels map[string]string) *corev1.Node {
-	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
-		},
-		Status: corev1.NodeStatus{
-			Capacity: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(cpuCapacity),
-				corev1.ResourceMemory: resource.MustParse(memCapacity),
-			},
-		},
-	}
-}
-
-// Helper function to create node metrics
-func newNodeMetrics(name, cpuUsage, memUsage string) *v1beta1.NodeMetrics {
-	return &v1beta1.NodeMetrics{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Usage: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(cpuUsage),
-			corev1.ResourceMemory: resource.MustParse(memUsage),
-		},
-	}
-}
 
 func TestProcessNamespace(t *testing.T) {
 	ctx := context.Background()
@@ -180,12 +79,12 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "enabled"}}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
-				newPod("test-istio", "pod-2", "node-a", "100m", "64Mi", true, "100m", "128Mi", map[string]string{}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
+				testutils.NewPod("test-istio", "pod-2", "node-a", "100m", "64Mi", true, "100m", "128Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{
-				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
-				newPodMetrics("test-istio", "pod-2", "50m", "40Mi", true, "50m", "64Mi"),
+				testutils.NewPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
+				testutils.NewPodMetrics("test-istio", "pod-2", "50m", "40Mi", true, "50m", "64Mi"),
 			},
 			hasMetricsAPI: true,
 			expectedNsInfo: &models.NamespaceInfo{
@@ -212,7 +111,7 @@ func TestProcessNamespace(t *testing.T) {
 			kubeObjects: []runtime.Object{
 				// istio.io/rev is set to "default" so that it matches the automatic istio injection (defined in the default-istio-sidecar-injector-mwh.yaml)
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-rev", Labels: map[string]string{"istio.io/rev": "default"}}},
-				newPod("test-rev", "pod-rev", "node-b", "100m", "256Mi", true, "50m", "50Mi", map[string]string{}),
+				testutils.NewPod("test-rev", "pod-rev", "node-b", "100m", "256Mi", true, "50m", "50Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{}, // No metrics objects available
 			hasMetricsAPI:  false,
@@ -284,10 +183,10 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{
-				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
+				testutils.NewPodMetrics("test-istio", "pod-1", "150m", "180Mi", true, "50m", "64Mi"),
 			},
 			hasMetricsAPI: true,
 			expectedNsInfo: &models.NamespaceInfo{
@@ -308,10 +207,10 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{
-				newPodMetrics("test-istio", "pod-1", "150m", "180Mi", false, "", ""),
+				testutils.NewPodMetrics("test-istio", "pod-1", "150m", "180Mi", false, "", ""),
 			},
 			hasMetricsAPI: true,
 			expectedNsInfo: &models.NamespaceInfo{
@@ -332,7 +231,7 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"sidecar.istio.io/inject": "true"}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"sidecar.istio.io/inject": "true"}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -359,7 +258,7 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio"}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"istio.io/rev": "default"}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{"istio.io/rev": "default"}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -387,7 +286,7 @@ func TestProcessNamespace(t *testing.T) {
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
 				// while the pod has istio injection enabled, the namespace has istio injection disabled, so the istio-proxy container will not be injected
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{"sidecar.istio.io/inject": "true"}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", false, "", "", map[string]string{"sidecar.istio.io/inject": "true"}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -411,7 +310,7 @@ func TestProcessNamespace(t *testing.T) {
 			namespace: "test-istio",
 			kubeObjects: []runtime.Object{
 				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-istio", Labels: map[string]string{"istio-injection": "disabled"}}},
-				newPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
+				testutils.NewPod("test-istio", "pod-1", "node-a", "200m", "256Mi", true, "100m", "128Mi", map[string]string{}),
 			},
 			metricsObjects: []runtime.Object{},
 			hasMetricsAPI:  false,
@@ -512,13 +411,13 @@ func TestProcessNode(t *testing.T) {
 	}{
 		{
 			name: "Node with standard labels and metrics",
-			node: *newNode("node-1", "4", "16Gi", map[string]string{
+			node: *testutils.NewNode("node-1", "4", "16Gi", map[string]string{
 				"node.kubernetes.io/instance-type": "m5.large",
 				"topology.kubernetes.io/region":    "us-east-1",
 				"topology.kubernetes.io/zone":      "us-east-1a",
 			}),
 			metricsObjects: []runtime.Object{
-				newNodeMetrics("node-1", "1500m", "8Gi"),
+				testutils.NewNodeMetrics("node-1", "1500m", "8Gi"),
 			},
 			hasMetricsAPI: true,
 			expectedNodeInfo: models.NodeInfo{
@@ -534,13 +433,13 @@ func TestProcessNode(t *testing.T) {
 		},
 		{
 			name: "Node with deprecated labels and metrics",
-			node: *newNode("node-1", "4", "16Gi", map[string]string{
+			node: *testutils.NewNode("node-1", "4", "16Gi", map[string]string{
 				"beta.kubernetes.io/instance-type":         "t3.medium",
 				"failure-domain.beta.kubernetes.io/region": "eu-west-1",
 				"failure-domain.beta.kubernetes.io/zone":   "eu-west-1b",
 			}),
 			metricsObjects: []runtime.Object{
-				newNodeMetrics("node-1", "1500m", "8Gi"),
+				testutils.NewNodeMetrics("node-1", "1500m", "8Gi"),
 			},
 			hasMetricsAPI: true,
 			expectedNodeInfo: models.NodeInfo{
@@ -556,7 +455,7 @@ func TestProcessNode(t *testing.T) {
 		},
 		{
 			name: "Node with labels but no metrics",
-			node: *newNode("node-1", "4", "16Gi", map[string]string{
+			node: *testutils.NewNode("node-1", "4", "16Gi", map[string]string{
 				"node.kubernetes.io/instance-type": "m5.large",
 				"topology.kubernetes.io/region":    "us-east-1",
 				"topology.kubernetes.io/zone":      "us-east-1a",
@@ -576,7 +475,7 @@ func TestProcessNode(t *testing.T) {
 		},
 		{
 			name:           "Node with missing labels (expect unknown) and metrics available but no metrics for node",
-			node:           *newNode("node-nolabels", "1000m", "2Gi", map[string]string{}),
+			node:           *testutils.NewNode("node-nolabels", "1000m", "2Gi", map[string]string{}),
 			metricsObjects: []runtime.Object{}, // No metrics available for the fake client to return
 			hasMetricsAPI:  true,               // API is present, but Get() will fail for "node-nolabels"
 			expectedNodeInfo: models.NodeInfo{

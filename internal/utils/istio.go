@@ -39,11 +39,8 @@ func analyzeWebhooksMatchStatus(whs []admissionregistrationv1.MutatingWebhook, p
 		nsMatched, nsLabel := extractMatchedSelectorInfo(wh.NamespaceSelector, nsLabels)
 		podMatched, podLabel := extractMatchedSelectorInfo(wh.ObjectSelector, podLabels)
 		if nsMatched && podMatched {
-			if nsLabel != "" && podLabel != "" {
-				return true
-			} else if nsLabel != "" {
-				return true
-			} else if podLabel != "" {
+			// both had a match, and at least one is non-empty meaning the label matched
+			if nsLabel != "" || podLabel != "" {
 				return true
 			}
 		} else if nsMatched {
@@ -51,6 +48,7 @@ func analyzeWebhooksMatchStatus(whs []admissionregistrationv1.MutatingWebhook, p
 				switch me.Operator {
 				case metav1.LabelSelectorOpDoesNotExist:
 					if _, ok := podLabels[me.Key]; ok {
+						// a label which shouldn't exist to be injected _does_ exist
 						return false
 					}
 				case metav1.LabelSelectorOpNotIn:
@@ -60,6 +58,7 @@ func analyzeWebhooksMatchStatus(whs []admissionregistrationv1.MutatingWebhook, p
 					}
 					for _, nv := range me.Values {
 						if nv == v {
+							// a label which shouldn't exist to be injected _does_ exist
 							return false
 						}
 					}
@@ -68,6 +67,7 @@ func analyzeWebhooksMatchStatus(whs []admissionregistrationv1.MutatingWebhook, p
 		} else if podMatched {
 			if v, ok := nsLabels["istio-injection"]; ok {
 				if v != "enabled" {
+					// istio-injection is NOT "enabled", so istio isn't injected
 					return false
 				}
 			}

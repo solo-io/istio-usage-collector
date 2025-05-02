@@ -38,6 +38,7 @@ func analyzeWebhooksMatchStatus(whs []admissionregistrationv1.MutatingWebhook, p
 	for _, wh := range whs {
 		nsMatched, nsLabel := extractMatchedSelectorInfo(wh.NamespaceSelector, nsLabels)
 		podMatched, podLabel := extractMatchedSelectorInfo(wh.ObjectSelector, podLabels)
+
 		if nsMatched && podMatched {
 			// both had a match, and at least one is non-empty meaning the label matched
 			if nsLabel != "" || podLabel != "" {
@@ -80,22 +81,33 @@ func extractMatchedSelectorInfo(ls *metav1.LabelSelector, objLabels map[string]s
 	if ls == nil {
 		return true, ""
 	}
+
+	// check if in cache
+	if info, ok := cache.get(ls, objLabels); ok {
+		return info.Matched, info.Label
+	}
+
 	selector, err := metav1.LabelSelectorAsSelector(ls)
 	if err != nil {
+		cache.set(ls, objLabels, &MatchedSelectorInfo{Matched: false, Label: ""})
 		return false, ""
 	}
 	matched = selector.Matches(labels.Set(objLabels))
 	if !matched {
+		cache.set(ls, objLabels, &MatchedSelectorInfo{Matched: false, Label: ""})
 		return matched, ""
 	}
 	for _, me := range ls.MatchExpressions {
 		switch me.Operator {
 		case metav1.LabelSelectorOpIn, metav1.LabelSelectorOpNotIn:
 			if v, exist := objLabels[me.Key]; exist {
+				cache.set(ls, objLabels, &MatchedSelectorInfo{Matched: matched, Label: fmt.Sprintf("%s=%s", me.Key, v)})
 				return matched, fmt.Sprintf("%s=%s", me.Key, v)
 			}
 		}
 	}
+
+	cache.set(ls, objLabels, &MatchedSelectorInfo{Matched: matched, Label: ""})
 	return matched, ""
 }
 

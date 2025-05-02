@@ -500,7 +500,7 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		// Check if istio injection is enabled on the pod-level
 		isPodIstioInjected := utils.CheckInject(istioWebhooks, pod.Labels, ns.Labels)
 
-		// if the namespace has istio injection enabled, or if the pod has istio injection enabled, we should count it as istio injected
+		// If any pod within the namespace has istio injection occurring, we should count the namespace as having istio injected
 		isIstioInjected = isIstioInjected || isPodIstioInjected
 
 		// Check each container

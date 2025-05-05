@@ -1,0 +1,49 @@
+{
+    "name": "kind-e2e-istio-global-injection-test-cluster",
+    "namespaces": {
+      "default": {
+        "is_istio_injected": false,
+        "pods": 0,
+        "resources": {
+          "regular": {
+            "containers": 0,
+            "request": {
+              "cpu": 0,
+              "memory_gb": 0
+            }
+          }
+        }
+      },
+      "namespace-1": {
+        "is_istio_injected": true,
+        "pods": 1,
+        "resources": {
+          "regular": {
+            "containers": 1,
+            "request": {
+              "cpu": 0.1,
+              "memory_gb": 0.09765625
+            }
+          },
+          "istio": {
+            "containers": 1,
+            "request": {
+              "cpu": 0.1,
+              "memory_gb": 0.125
+            }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "e2e-istio-global-injection-test-cluster-control-plane": {
+        "instance_type": "unknown",
+        "region": "unknown",
+        "zone": "unknown",
+        "resources": {
+          "capacity": {}
+        }
+      }
+    },
+    "has_metrics": false
+  } 

@@ -23,7 +23,9 @@ func (b *BaseTestSuite) SetupBase(t *testing.T, clusterName string, metricsServe
 	t.Logf("Using kubeconfig: %s", b.kubeconfigPath)
 
 	// Install Istio
-	b.istioValuesPath = "testdata/input/istio-values.yaml"
+	if b.istioValuesPath == "" {
+		b.istioValuesPath = "testdata/input/istio-values.yaml"
+	}
 	installIstio(t, b.kubeconfigPath, b.istioValuesPath)
 
 	// Optionally install Metrics Server

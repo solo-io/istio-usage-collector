@@ -10,7 +10,8 @@ type ClusterInfo struct {
 
 // NamespaceInfo represents information about a Kubernetes namespace
 type NamespaceInfo struct {
-	Pods            int          `json:"pods" yaml:"pods"`
+	Pods int `json:"pods" yaml:"pods"`
+	// IsIstioInjected is true the namespace contains at least one pod with istio injection enabled
 	IsIstioInjected bool         `json:"is_istio_injected" yaml:"is_istio_injected"`
 	Resources       ResourceInfo `json:"resources" yaml:"resources"`
 }

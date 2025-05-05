@@ -83,6 +83,9 @@ run-unit-tests:
 run-e2e-tests:
 	@gotestsum --junitfile junit-e2e-test.xml -- -tags=e2e ./...
 
+run-performance-tests:
+	@gotestsum --junitfile junit-performance-test.xml -- -tags=performance ./...
+
 add-test-dependencies:
 	@helm repo add metrics-server "https://kubernetes-sigs.github.io/metrics-server/"
 	@helm repo add istio "https://istio-release.storage.googleapis.com/charts"

@@ -14,6 +14,8 @@ The Istio Usage Collector is a Go implementation of the [`gather-cluster-info.sh
 
 This data is collected into a JSON or YAML file that can be used for further analysis through our detailed migration estimator tool.
 
+Istio data gathered and reported is based on automatic sidecar injection defined within Istio's MutatingAdmissionWebhooks.
+
 ## Installation
 
 ### Downloading release

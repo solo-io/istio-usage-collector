@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+
 	"github.com/solo-io/istio-usage-collector/internal/logging"
 	"github.com/solo-io/istio-usage-collector/internal/utils"
 	"github.com/solo-io/istio-usage-collector/pkg/models"
@@ -197,7 +199,12 @@ func processNodes(ctx context.Context, clientset kubernetes.Interface, metricsCl
 	errorCh := make(chan error, totalNodes)
 
 	// Use a semaphore to control concurrency
-	concurrentLimit := runtime.NumCPU() * 2
+	var concurrentLimit int
+	if cfg.MaxProcessors > 0 {
+		concurrentLimit = cfg.MaxProcessors
+	} else {
+		concurrentLimit = runtime.NumCPU() * 2
+	}
 	semaphore := make(chan struct{}, concurrentLimit)
 
 	logging.Debug("Processing nodes with up to %d concurrent requests", concurrentLimit)
@@ -326,10 +333,30 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 	errorCh := make(chan error, totalNamespaces)
 
 	// Use a semaphore to control concurrency based on system resources
-	concurrentLimit := runtime.NumCPU() * 4
+	var concurrentLimit int
+	if cfg.MaxProcessors > 0 {
+		concurrentLimit = cfg.MaxProcessors
+	} else {
+		concurrentLimit = runtime.NumCPU() * 4
+	}
 	semaphore := make(chan struct{}, concurrentLimit)
 
 	logging.Debug("Processing namespaces with up to %d concurrent requests", concurrentLimit)
+
+	// Get all mutating webhook configurations - istio uses mwhs to define its automatic sidecar injection policy
+	webhooks, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logging.Warn("Failed to list mutating webhook configurations: %v", err)
+	}
+	if webhooks == nil || len(webhooks.Items) == 0 {
+		logging.Warn("No mutating webhook configurations found in cluster %s", cfg.KubeContext)
+	}
+	// filter out non-istio webhooks
+	istioWebhooks := utils.FilterIstioWebhooks(webhooks.Items)
+	if len(istioWebhooks) == 0 {
+		logging.Warn("No Istio-related mutating webhook configurations found in cluster %s", cfg.KubeContext)
+	}
+
 	for _, ns := range namespaces.Items {
 		// Check parent context for cancellation before spawning more goroutines
 		if ctx.Err() != nil {
@@ -367,8 +394,7 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 				return
 			}
 
-			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics)
-
+			nsInfo, err := processNamespace(workerCtx, clientset, metricsClient, namespace.Name, hasMetrics, istioWebhooks)
 			if progress != nil {
 				progress.Increment()
 			}
@@ -410,8 +436,9 @@ func processNamespaces(ctx context.Context, clientset kubernetes.Interface, metr
 	return nil
 }
 
-// processNamespace processes an individual namespace
-func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool) (*models.NamespaceInfo, error) {
+// processNamespace processes an individual namespace and its pods
+// TODO: We currently don't check for Sidecar CRs -- https://istio.io/latest/docs/reference/config/networking/sidecar/
+func processNamespace(ctx context.Context, clientset kubernetes.Interface, metricsClient metricsv.Interface, namespace string, hasMetrics bool, istioWebhooks []admissionregistrationv1.MutatingWebhookConfiguration) (*models.NamespaceInfo, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -420,19 +447,6 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 	ns, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get namespace details: %w", err)
-	}
-
-	isIstioInjected := false
-	if value, ok := ns.Labels["istio-injection"]; ok && value == "enabled" {
-		isIstioInjected = true
-	} else if _, ok := ns.Labels["istio.io/rev"]; ok {
-		isIstioInjected = true
-	}
-
-	if isIstioInjected {
-		logging.Debug("Namespace %s has Istio injection enabled", namespace)
-	} else {
-		logging.Debug("Namespace %s has no Istio injection", namespace)
 	}
 
 	// Get pods in the namespace
@@ -478,11 +492,26 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 	istioCpuActual := 0.0
 	istioMemActual := 0.0
 
+	// Whether the namespace has at least one pod with istio injection
+	isIstioInjected := false
+
 	// Process all pods
 	for _, pod := range pods.Items {
+		// Check if istio injection is enabled on the pod-level
+		isPodIstioInjected := utils.CheckInject(istioWebhooks, pod.Labels, ns.Labels)
+
+		// If any pod within the namespace has istio injection occurring, we should count the namespace as having istio injected
+		isIstioInjected = isIstioInjected || isPodIstioInjected
+
 		// Check each container
 		for _, container := range pod.Spec.Containers {
-			isIstioProxy := container.Name == "istio-proxy"
+			// we only count istio-proxy container as an istio sidecar if the pod has istio injection enabled
+			isIstioProxyContainer := container.Name == "istio-proxy"
+			isIstioProxy := isIstioProxyContainer && isPodIstioInjected
+			if isIstioProxyContainer && !isPodIstioInjected {
+				// add a debug log if the pod has an istio-proxy container but istio injection is disabled, meaning we won't treat it as an istio sidecar
+				logging.Debug("%s.%s does not have istio injection enabled, treating its 'istio-proxy' container as a regular container", namespace, pod.Name)
+			}
 
 			// Count container types
 			if isIstioProxy {
@@ -539,9 +568,10 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		}
 	}
 
-	// Create namespace info
+	// Create namespace info (before appending actual resource usage and istio resources)
 	nsInfo := &models.NamespaceInfo{
-		Pods:            len(pods.Items),
+		Pods: len(pods.Items),
+		// the namespace had istio injected if it was either enabled on the namespace-level OR within any of its pods
 		IsIstioInjected: isIstioInjected,
 		Resources: models.ResourceInfo{
 			Regular: models.ContainerResources{
@@ -561,8 +591,8 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		}
 	}
 
-	// Add Istio resources if the namespace has Istio injection
-	if isIstioInjected {
+	// Only add the Istio resources field if the namespace contained at least one pod with istio injection
+	if nsInfo.IsIstioInjected {
 		nsInfo.Resources.Istio = &models.ContainerResources{
 			Containers: istioContainers,
 			Request: models.Resources{
@@ -578,7 +608,6 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 			}
 		}
 	}
-
 	return nsInfo, nil
 }
 

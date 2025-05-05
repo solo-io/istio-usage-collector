@@ -1,0 +1,87 @@
+namespaces:
+  # sets up 2500 namespaces with 50 pods each, in the perf-node-<number> node, where istio injection is defined on the namespace
+  - namePrefix: perf-test-ns-
+    count: 2500
+    labels:
+      env: performance
+    isIstioInjected: true
+    hasMetrics: true
+    podConfig:
+      namePrefix: app-pod-
+      count: 50
+      nodeNamePrefix: perf-node-
+      labels:
+        app: myapp
+      appContainer:
+        cpuRequest: "150m"
+        memRequest: "200Mi"
+        cpuActual: "100m"
+        memActual: "150Mi"
+      istioProxy:
+        cpuRequest: "50m"
+        memRequest: "100Mi"
+        cpuActual: "25m"
+        memActual: "75Mi"
+
+  # sets up 2500 namespaces with 50 pods each, in the perf-node-<number> node, where istio injection is defined on the pod
+  - namePrefix: perf-test-ns-3-
+    count: 2500
+    labels:
+      env: performance
+    isIstioInjected: false
+    hasMetrics: true
+    podConfig:
+      namePrefix: app-pod-injected-
+      count: 50
+      nodeNamePrefix: perf-node-
+      labels:
+        app: myapp
+        sidecar.istio.io/inject: "true"
+      appContainer:
+        cpuRequest: "150m"
+        memRequest: "200Mi"
+        cpuActual: "100m"
+        memActual: "150Mi"
+      istioProxy:
+        cpuRequest: "50m"
+        memRequest: "100Mi"
+        cpuActual: "25m"
+        memActual: "75Mi"
+  
+  # sets up 2500 namespaces with 10 pods each, in the perf-node-<number> node, where istio injection is not defined
+  - namePrefix: no-istio-ns-
+    count: 2500
+    labels:
+      env: no-istio
+    isIstioInjected: false
+    hasMetrics: false
+    podConfig:
+      namePrefix: simple-pod-
+      count: 10
+      nodeNamePrefix: perf-node-
+      labels:
+        app: simpleapp
+      appContainer:
+        cpuRequest: "50m"
+        memRequest: "64Mi"
+
+  # sets up 1500 namespaces with 25 pods each, in the perf-node-3-<number> node, where istio injection is defined on the pod, but is explicitly disabled in the namespace
+  - namePrefix: perf-test-ns-disabled-
+    count: 1500
+    labels:
+      env: performance
+      istio-injection: disabled
+    isIstioInjected: false
+    hasMetrics: true
+    podConfig:
+      namePrefix: app-pod-disabled-
+      count: 25
+      nodeNamePrefix: perf-node-3-
+      labels:
+        app: myapp
+        sidecar.istio.io/inject: "true"
+      appContainer:
+        cpuRequest: "150m"
+        memRequest: "200Mi"
+        cpuActual: "100m"
+        memActual: "150Mi"

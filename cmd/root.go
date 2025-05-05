@@ -24,6 +24,7 @@ type CommandFlags struct {
 	OutputFilePrefix   string
 	EnableDebug        bool
 	NoProgress         bool
+	MaxProcessors      int
 }
 
 // DefaultFlags returns a CommandFlags struct initialized with default values
@@ -37,6 +38,7 @@ func DefaultFlags() *CommandFlags {
 		OutputFilePrefix:   "",
 		EnableDebug:        false,
 		NoProgress:         false,
+		MaxProcessors:      0,
 	}
 }
 
@@ -135,6 +137,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 				OutputFormat:       flags.OutputFormat,
 				OutputFilePrefix:   prefix,
 				NoProgress:         flags.NoProgress,
+				MaxProcessors:      flags.MaxProcessors,
 			}
 
 			// Gather cluster information
@@ -157,6 +160,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&flags.OutputFilePrefix, "output-prefix", "p", "", "Custom prefix for the output file. If not set, uses the cluster name.")
 	cmd.PersistentFlags().BoolVar(&flags.EnableDebug, "debug", false, "Enable debug mode.")
 	cmd.PersistentFlags().BoolVar(&flags.NoProgress, "no-progress", false, "Disable the progress bar while processing resources.")
+	cmd.PersistentFlags().IntVar(&flags.MaxProcessors, "max-processors", 0, "Maximum number of processors to use. If not set, or <= 0, it will use all available processors.")
 
 	return cmd
 }

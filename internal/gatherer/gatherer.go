@@ -591,7 +591,7 @@ func processNamespace(ctx context.Context, clientset kubernetes.Interface, metri
 		}
 	}
 
-	// Add Istio resources if the namespace has Istio injection (either namespace-level or pod-level)
+	// Only add the Istio resources field if the namespace contained at least one pod with istio injection
 	if nsInfo.IsIstioInjected {
 		nsInfo.Resources.Istio = &models.ContainerResources{
 			Containers: istioContainers,

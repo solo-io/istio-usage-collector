@@ -116,8 +116,9 @@ func runMainBinary(t *testing.T, config utils.Config) string {
 
 	// Construct command line arguments
 	args := []string{"run", "main.go"}
-	if config.ObfuscateNames {
-		args = append(args, "--hide-names")
+	if !config.ObfuscateNames {
+		// We need to explicitly set the flag to false, because the default is true
+		args = append(args, "--hide-names=false")
 	}
 	if config.ContinueProcessing {
 		args = append(args, "--continue")

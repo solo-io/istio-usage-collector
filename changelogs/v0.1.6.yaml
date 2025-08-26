@@ -1,0 +1,2 @@
+other:
+- Bump golang.org/x/oauth2 to address CVE-2025-22868.

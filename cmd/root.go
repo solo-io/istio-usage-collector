@@ -30,7 +30,7 @@ type CommandFlags struct {
 // DefaultFlags returns a CommandFlags struct initialized with default values
 func DefaultFlags() *CommandFlags {
 	return &CommandFlags{
-		HideNames:          false,
+		HideNames:          true,
 		ContinueProcessing: false,
 		KubeContext:        "",
 		OutputDir:          ".",
@@ -152,7 +152,7 @@ func GetCommand(customFlags ...*CommandFlags) *cobra.Command {
 	}
 
 	// Define persistent flags for the command
-	cmd.PersistentFlags().BoolVarP(&flags.HideNames, "hide-names", "n", false, "Hide the names of the cluster and namespaces by using a hash.")
+	cmd.PersistentFlags().BoolVarP(&flags.HideNames, "hide-names", "n", true, "Hide the names of the cluster and namespaces by using a hash. If not set, defaults to true.")
 	cmd.PersistentFlags().BoolVarP(&flags.ContinueProcessing, "continue", "c", false, "If the script was interrupted, continue processing from the last saved state.")
 	cmd.PersistentFlags().StringVarP(&flags.KubeContext, "context", "k", "", "Kubernetes context to use. If not set, uses the current context.")
 	cmd.PersistentFlags().StringVarP(&flags.OutputDir, "output-dir", "d", ".", "Directory to store the output file in.")

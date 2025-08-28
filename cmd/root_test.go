@@ -38,7 +38,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 			name: "Default flags",
 			args: []string{},
 			expectedFlags: CommandFlags{
-				HideNames:          false,
+				HideNames:          true,
 				ContinueProcessing: false,
 				KubeContext:        "", // Default is empty string, where during execution, the current context is used
 				OutputDir:          ".",
@@ -52,7 +52,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 		{
 			name: "All flags set",
 			args: []string{
-				"--hide-names",
+				"--hide-names=false",
 				"--continue",
 				"--context", "test-context",
 				"--output-dir", "/tmp/test",
@@ -63,7 +63,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				"--max-processors", "1",
 			},
 			expectedFlags: CommandFlags{
-				HideNames:          true,
+				HideNames:          false,
 				ContinueProcessing: true,
 				KubeContext:        "test-context",
 				OutputDir:          "/tmp/test",
@@ -77,7 +77,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 		{
 			name: "Short flags",
 			args: []string{
-				"-n",
+				"-n=false",
 				"-c",
 				"-k", "short-ctx",
 				"-d", "/short",
@@ -85,7 +85,7 @@ func TestRootCommandFlagParsing(t *testing.T) {
 				"-p", "short-p",
 			},
 			expectedFlags: CommandFlags{
-				HideNames:          true,
+				HideNames:          false,
 				ContinueProcessing: true,
 				KubeContext:        "short-ctx",
 				OutputDir:          "/short",

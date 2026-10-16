@@ -53,7 +53,7 @@ jobs:
         uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
           version: 'v3.13.3'
-      - uses: engineerd/setup-kind@71e45b960fc8dd50b4aeabf6eb6ef2ca0920b4c1 # v0.6.2
+      - uses: engineerd/setup-kind@ecfad61750951586a9ef973db567df1d28671bdc # v0.6.2
         with:
           version: "v0.27.0"
           skipClusterCreation: 'true'

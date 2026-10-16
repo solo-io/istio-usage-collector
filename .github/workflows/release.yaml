@@ -15,15 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Using this in this smaller action to simplify the release process and not port over all the existing changelog handling from other repos.
       - name: Generate Changelog
         id: changelog
-        uses: infocus7/changelog-files-action@v2.0.1
+        uses: infocus7/changelog-files-action@a2d35cc7bcdaedd1f903e5f204c14f63e814dc47 # v2.0.1
         with:
           release-tag-name: ${{ github.event.release.tag_name }}
           changelog-directory: changelogs
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: changelog
       - name: Update Release Notes
@@ -67,7 +67,7 @@ jobs:
             arch: arm64
             pack: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build Binary
         shell: bash
         env:
@@ -82,7 +82,7 @@ jobs:
             make build
           fi
       - name: Upload Binary Artifact # Upload the binary to artifacts, so the publish-binaries job can download it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: output-${{ matrix.platform.os }}-${{ matrix.platform.arch }}
           path: _output/${{ github.event.release.tag_name }}
@@ -94,19 +94,19 @@ jobs:
     needs: [build-binaries]
     steps:
       - name: Download All Binary Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           merge-multiple: true
           path: _output/${{ github.event.release.tag_name }}
       - name: Authenticate to Google Cloud Storage
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2.1.13
         with:
           credentials_json: ${{ secrets.ISTIO_USAGE_COLLECTOR }}
           project_id: solo-public
       - name: Set up Google Cloud SDK
-        uses: 'google-github-actions/setup-gcloud@v2'
+        uses: 'google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f' # v2.2.1
       - name: Publish Binaries to Google Cloud Storage
-        uses: 'google-github-actions/upload-cloud-storage@v2'
+        uses: 'google-github-actions/upload-cloud-storage@c0f6160ff80057923ff50e5e567695cea181ec23' # v2.2.4
         with:
           path: _output/
           destination: istio-usage-collector
@@ -119,14 +119,14 @@ jobs:
     timeout-minutes: 10
     needs: [publish-binaries]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Authenticate to Google Cloud Storage
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2.1.13
         with:
           credentials_json: ${{ secrets.ISTIO_USAGE_COLLECTOR }}
           project_id: solo-public
       - name: Set up Google Cloud SDK
-        uses: 'google-github-actions/setup-gcloud@v2'
+        uses: 'google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f' # v2.2.1
       - name: Set Up Release Metadata
         shell: bash
         run: |
@@ -142,7 +142,7 @@ jobs:
           # Set up the install script
           cp "./scripts/install.sh" "_output/metadata/install.sh"
       - name: Upload Release Metadata
-        uses: 'google-github-actions/upload-cloud-storage@v2'
+        uses: 'google-github-actions/upload-cloud-storage@c0f6160ff80057923ff50e5e567695cea181ec23' # v2.2.4
         with:
           path: '_output/metadata'
           destination: istio-usage-collector
